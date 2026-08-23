@@ -1,0 +1,165 @@
+// Shared API contract between the Worker and the web client.
+
+export type SessionStatus = "draft" | "open" | "checkin" | "active" | "complete" | "cancelled";
+export type PlayerStatus = "confirmed" | "waitlist" | "checked_in" | "dropped";
+export type MatchStatus = "pending" | "submitted" | "disputed" | "confirmed";
+export type FormatKey = "americano";
+export type GroupRole = "organizer" | "member";
+
+export interface UserInfo {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface GroupSummary {
+  id: string;
+  name: string;
+  role: GroupRole;
+  memberCount: number;
+}
+
+export interface SessionSummary {
+  id: string;
+  groupId: string;
+  groupName: string;
+  name: string;
+  status: SessionStatus;
+  startsAt: number | null;
+  venue: string | null;
+  format: FormatKey;
+  courts: number;
+  maxPlayers: number;
+  pointsPerMatch: number;
+  inviteCode: string;
+  confirmedCount: number;
+  winnerName?: string | null;
+}
+
+export interface MeResponse {
+  user: UserInfo;
+  groups: GroupSummary[];
+  sessions: SessionSummary[];
+}
+
+export interface GroupMemberRow {
+  userId: string;
+  name: string;
+  role: GroupRole;
+  joinedAt: number;
+}
+
+export interface GroupDetail {
+  id: string;
+  name: string;
+  myRole: GroupRole;
+  members: GroupMemberRow[];
+  sessions: SessionSummary[];
+}
+
+export interface PlayerRow {
+  id: string; // session_player id — this is the id used everywhere in rounds/matches/standings
+  name: string;
+  userId: string | null;
+  isGuest: boolean;
+  status: PlayerStatus;
+  byes: number;
+  checkedInAt: number | null;
+  joinedAt: number;
+}
+
+export interface MatchRow {
+  id: string;
+  roundId: string;
+  court: number;
+  a: [string, string]; // team A session_player ids
+  b: [string, string]; // team B session_player ids
+  scoreA: number | null;
+  scoreB: number | null;
+  status: MatchStatus;
+  submittedBy: string | null; // session_player id
+}
+
+export interface RoundRow {
+  id: string;
+  number: number;
+  byes: string[]; // session_player ids
+  matches: MatchRow[];
+  complete: boolean; // all matches confirmed
+}
+
+export interface StandingRow {
+  playerId: string;
+  name: string;
+  points: number;
+  against: number;
+  diff: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  played: number;
+  byes: number;
+}
+
+export interface SessionDetail {
+  id: string;
+  groupId: string;
+  groupName: string;
+  name: string;
+  venue: string | null;
+  startsAt: number | null;
+  status: SessionStatus;
+  format: FormatKey;
+  courts: number;
+  maxPlayers: number;
+  pointsPerMatch: number;
+  inviteCode: string;
+  myRole: "organizer" | "player" | "none";
+  myPlayerId: string | null;
+  players: PlayerRow[];
+  rounds: RoundRow[];
+  standings: StandingRow[];
+  warnings: string[]; // populated for organizers only
+  counts: { confirmed: number; waitlist: number; checkedIn: number };
+  createdAt: number;
+}
+
+export interface JoinInfo {
+  sessionId: string;
+  name: string;
+  groupName: string;
+  venue: string | null;
+  startsAt: number | null;
+  status: SessionStatus;
+  format: FormatKey;
+  courts: number;
+  maxPlayers: number;
+  pointsPerMatch: number;
+  confirmedCount: number;
+  waitlistCount: number;
+  myStatus: PlayerStatus | null;
+}
+
+// Read-only public board (TV / court display) payload.
+export interface BoardData {
+  name: string;
+  groupName: string;
+  status: SessionStatus;
+  pointsPerMatch: number;
+  players: { id: string; name: string }[];
+  rounds: RoundRow[];
+  standings: StandingRow[];
+}
+
+export interface ApiError {
+  error: string;
+}
+
+export const SESSION_STATUS_LABEL: Record<SessionStatus, string> = {
+  draft: "Draft",
+  open: "Open for signup",
+  checkin: "Check-in",
+  active: "Live",
+  complete: "Finished",
+  cancelled: "Cancelled",
+};

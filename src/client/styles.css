@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-zinc-950 text-zinc-100 antialiased;
+  min-height: 100dvh;
+}
+
+/* Subtle court-green glow behind the app */
+.app-bg {
+  background:
+    radial-gradient(60rem 40rem at 85% -10%, rgba(163, 230, 53, 0.07), transparent 60%),
+    radial-gradient(50rem 35rem at -10% 110%, rgba(16, 185, 129, 0.05), transparent 60%);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: rgba(163, 230, 53, 0.35);
+}

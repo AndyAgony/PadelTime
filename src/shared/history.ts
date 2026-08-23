@@ -1,0 +1,43 @@
+import { pairKey } from "./formats/types";
+
+export interface HistoryRound {
+  number: number;
+  byes: string[];
+  matches: { a: [string, string]; b: [string, string] }[];
+}
+
+export interface History {
+  partnerCounts: Record<string, number>;
+  opponentCounts: Record<string, number>;
+  playedCounts: Record<string, number>;
+  byeCounts: Record<string, number>;
+  lastByeRound: Record<string, number>;
+}
+
+/** Aggregate partner/opponent/bye history from played rounds (scored or not —
+ *  a scheduled pairing counts against diversity either way). */
+export function buildHistory(rounds: HistoryRound[]): History {
+  const h: History = {
+    partnerCounts: {},
+    opponentCounts: {},
+    playedCounts: {},
+    byeCounts: {},
+    lastByeRound: {},
+  };
+  const bump = (rec: Record<string, number>, key: string, by = 1) => {
+    rec[key] = (rec[key] ?? 0) + by;
+  };
+  for (const round of rounds) {
+    for (const p of round.byes) {
+      bump(h.byeCounts, p);
+      h.lastByeRound[p] = Math.max(h.lastByeRound[p] ?? 0, round.number);
+    }
+    for (const m of round.matches) {
+      bump(h.partnerCounts, pairKey(m.a[0], m.a[1]));
+      bump(h.partnerCounts, pairKey(m.b[0], m.b[1]));
+      for (const x of m.a) for (const y of m.b) bump(h.opponentCounts, pairKey(x, y));
+      for (const p of [...m.a, ...m.b]) bump(h.playedCounts, p);
+    }
+  }
+  return h;
+}
