@@ -125,7 +125,11 @@ export function PrintSheetPage() {
               <p className="text-xl font-black tracking-tight">🎾 PadelTime · AMERICANO</p>
               <p className="text-[11px] text-zinc-600">
                 {players} players · {courts} court{courts === 1 ? "" : "s"} · {rounds} rounds ·{" "}
-                <b>{points} points per match</b> — every player scores their team's points
+                <b>{points} points per match</b>
+              </p>
+              <p className="text-[11px] font-semibold text-zinc-700">
+                Fill the player list first (name + initials). Matchups show player numbers (#) — score
+                in the empty boxes as you play.
               </p>
             </div>
             <div className="text-right text-[11px] text-zinc-700">
@@ -134,8 +138,29 @@ export function PrintSheetPage() {
             </div>
           </div>
 
+          {/* Roster: number → name → initials */}
+          <div className={cls("rounded border border-zinc-300", dense ? "mt-2" : "mt-3")}>
+            <div className={cls("flex items-center justify-between border-b border-zinc-300 bg-zinc-100 px-2", dense ? "py-px" : "py-0.5")}>
+              <span className={cls("font-black", dense ? "text-[11px]" : "text-xs")}>PLAYERS</span>
+              <span className={cls("text-zinc-600", dense ? "text-[9px]" : "text-[10px]")}>
+                name ................ initials □
+              </span>
+            </div>
+            <div className={cls("grid px-2", players > 12 ? "grid-cols-4 gap-x-3" : "grid-cols-2 gap-x-5", dense ? "py-1" : "py-1.5")}>
+              {Array.from({ length: players }, (_, i) => i + 1).map((p) => (
+                <div key={p} className={cls("flex items-center gap-1.5", dense ? "py-px" : "py-[3px]")}>
+                  <span className={cls("tabular w-6 shrink-0 text-right font-black", dense ? "text-[10px]" : "text-[11px]")}>
+                    #{p}
+                  </span>
+                  <span className={cls("min-w-0 flex-1 border-b border-zinc-400", dense ? "h-3" : "h-3.5")} />
+                  <span className={cls("shrink-0 rounded-[2px] border border-zinc-400", dense ? "h-3 w-6" : "h-4 w-7")} />
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Schedule */}
-          <div className={cls("grid gap-x-5", dense ? "mt-2 gap-y-1.5" : "mt-3 gap-y-2", rounds > 4 ? "grid-cols-2" : "grid-cols-1")}>
+          <div className={cls("grid gap-x-5", dense ? "mt-2 gap-y-1" : "mt-3 gap-y-2", rounds > 4 ? "grid-cols-2" : "grid-cols-1")}>
             {schedule.map((round) => (
               <div key={round.number} className="break-inside-avoid rounded border border-zinc-300">
                 <div className={cls("flex items-center justify-between border-b border-zinc-300 bg-zinc-100 px-2", dense ? "py-px" : "py-0.5")}>
@@ -154,12 +179,18 @@ export function PrintSheetPage() {
                           C{m.court}
                         </td>
                         <td className={cls("tabular text-center font-bold", dense ? "py-px text-[11px]" : "py-0.5 text-xs")}>
-                          {m.a[0]} + {m.a[1]} <span className="font-normal text-zinc-400">vs</span> {m.b[0]} + {m.b[1]}
+                          <span className="font-normal text-zinc-500">#</span>{m.a[0]}{" "}
+                          <span className="font-normal text-zinc-400">&amp;</span>{" "}
+                          <span className="font-normal text-zinc-500">#</span>{m.a[1]}{" "}
+                          <span className="font-normal text-zinc-400">vs</span>{" "}
+                          <span className="font-normal text-zinc-500">#</span>{m.b[0]}{" "}
+                          <span className="font-normal text-zinc-400">&amp;</span>{" "}
+                          <span className="font-normal text-zinc-500">#</span>{m.b[1]}
                         </td>
-                        <td className={cls("pr-2 text-right", dense ? "py-px" : "py-0.5")}>
-                          <span className={cls("inline-block border-b border-zinc-400 text-center", dense ? "w-7" : "w-9")}>&nbsp;</span>
-                          <span className="mx-0.5 text-[10px] text-zinc-400">:</span>
-                          <span className={cls("inline-block border-b border-zinc-400 text-center", dense ? "w-7" : "w-9")}>&nbsp;</span>
+                        <td className={cls("whitespace-nowrap pr-2 text-right", dense ? "py-px" : "py-0.5")}>
+                          <span className={cls("inline-block rounded-[2px] border border-zinc-400 align-middle", dense ? "h-3 w-7" : "h-4 w-9")} />
+                          <span className="mx-0.5 align-middle text-[10px] text-zinc-400">:</span>
+                          <span className={cls("inline-block rounded-[2px] border border-zinc-400 align-middle", dense ? "h-3 w-7" : "h-4 w-9")} />
                         </td>
                       </tr>
                     ))}
@@ -173,16 +204,16 @@ export function PrintSheetPage() {
           <table className={cls("w-full border-collapse", dense ? "mt-2" : "mt-3")}>
             <thead>
               <tr>
-                <th className={cls("border border-zinc-400 bg-zinc-100 px-1 py-0.5 font-black", dense ? "text-[10px]" : "text-[11px]")}>#</th>
-                <th className={cls("border border-zinc-400 bg-zinc-100 px-2 py-0.5 text-left font-black", dense ? "text-[10px]" : "text-[11px]")}>
-                  PLAYER
+                <th className={cls("w-8 border border-zinc-400 bg-zinc-100 px-1 py-0.5 font-black", dense ? "text-[10px]" : "text-[11px]")}>#</th>
+                <th className={cls("border border-zinc-400 bg-zinc-100 px-2 py-0.5 text-left font-black", dense ? "w-16 text-[10px]" : "w-20 text-[11px]")}>
+                  INITIALS
                 </th>
                 {schedule.map((r) => (
-                  <th key={r.number} className={cls("border border-zinc-400 bg-zinc-100 px-1 py-0.5 font-bold", dense ? "w-8 text-[9px]" : "w-10 text-[10px]")}>
+                  <th key={r.number} className={cls("border border-zinc-400 bg-zinc-100 px-1 py-0.5 font-bold", dense ? "text-[9px]" : "text-[10px]")}>
                     R{r.number}
                   </th>
                 ))}
-                <th className={cls("border border-zinc-400 bg-zinc-200 px-1 py-0.5 font-black", dense ? "w-10 text-[10px]" : "w-14 text-[11px]")}>
+                <th className={cls("border border-zinc-400 bg-zinc-200 px-1 py-0.5 font-black", dense ? "w-12 text-[10px]" : "w-16 text-[11px]")}>
                   TOTAL
                 </th>
               </tr>
@@ -190,7 +221,7 @@ export function PrintSheetPage() {
             <tbody>
               {Array.from({ length: players }, (_, i) => i + 1).map((p) => (
                 <tr key={p}>
-                  <td className={cls("tabular border border-zinc-400 px-1 text-center font-black", dense ? "py-[2px] text-[10px]" : "py-1 text-[11px]")}>
+                  <td className={cls("tabular border border-zinc-400 px-1 text-center font-black", dense ? "py-px text-[10px] leading-tight" : "py-1 text-[11px]")}>
                     {p}
                   </td>
                   <td className="border border-zinc-400 px-2" />
@@ -207,10 +238,9 @@ export function PrintSheetPage() {
             </tbody>
           </table>
 
-          <p className="mt-1.5 text-[9px] text-zinc-500">
-            Write each name next to its number — the schedule above uses the numbers. “—” means that player sits the
-            round out. After each match, both partners write their team's score in their own row; highest total wins.
-            Pairings maximise partner &amp; opponent variety (generated by padeltime).
+          <p className="mt-1.5 text-[9px] leading-tight text-zinc-500">
+            “—” = sitting that round out. Both partners write their team's score in their own row each round;
+            highest total wins. Pairings maximise partner &amp; opponent variety — padeltime.
           </p>
         </div>
       </div>
