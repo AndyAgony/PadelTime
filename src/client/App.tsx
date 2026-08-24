@@ -8,6 +8,7 @@ import { GroupPage } from "./pages/GroupPage";
 import { SessionPage } from "./pages/SessionPage";
 import { JoinPage } from "./pages/JoinPage";
 import { BoardPage } from "./pages/BoardPage";
+import { PrintSheetPage } from "./pages/PrintSheetPage";
 import { firstName } from "./lib/format";
 
 function Logo() {
@@ -66,6 +67,7 @@ export function App() {
       <Route path="/register" element={<AuthPage mode="register" />} />
       <Route path="/join/:code" element={<JoinPage />} />
       <Route path="/board/:code" element={<BoardPage />} />
+      <Route path="/print" element={<PrintSheetPage />} />
       <Route element={<AppLayout />}>
         <Route path="/app" element={<Home />} />
         <Route path="/app/groups/:id" element={<GroupPage />} />

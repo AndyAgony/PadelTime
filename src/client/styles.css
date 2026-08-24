@@ -27,3 +27,22 @@ body {
 ::selection {
   background: rgba(163, 230, 53, 0.35);
 }
+
+/* Pen & paper sheet printing */
+@page {
+  size: A4;
+  margin: 8mm;
+}
+
+@media print {
+  body {
+    background: #fff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .sheet {
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+}
