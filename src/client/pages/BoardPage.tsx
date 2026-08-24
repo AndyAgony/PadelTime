@@ -56,8 +56,9 @@ export function BoardPage() {
                 {current.matches.map((m) => (
                   <div key={m.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
                     <div className="mb-3 flex items-center justify-between">
-                      <span className="text-sm font-black uppercase tracking-widest text-zinc-500">
-                        Court {m.court}
+                      <span className="flex items-center gap-2 text-2xl font-black uppercase tracking-tight text-lime-300">
+                        <span aria-hidden>🏟️</span>
+                        <span>Court {m.court}</span>
                       </span>
                       <span
                         className={cls(

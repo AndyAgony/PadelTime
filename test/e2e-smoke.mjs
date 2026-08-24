@@ -19,12 +19,19 @@ async function shot(page, name) {
 }
 
 async function launch() {
+  // Honor an outbound proxy (e.g. sandboxed CI environments); bypass it for localhost.
+  const proxyServer = process.env.HTTPS_PROXY || process.env.https_proxy;
+  const opts = proxyServer
+    ? { proxy: { server: proxyServer, bypass: "127.0.0.1,localhost" } }
+    : {};
   try {
-    return await chromium.launch();
+    return await chromium.launch(opts);
   } catch {
-    return await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+    return await chromium.launch({ ...opts, executablePath: "/opt/pw-browsers/chromium" });
   }
 }
+
+const contextOpts = { ignoreHTTPSErrors: !!(process.env.HTTPS_PROXY || process.env.https_proxy) };
 
 async function register(page, name, email) {
   await page.goto(`${BASE}/register`);
@@ -38,7 +45,7 @@ async function register(page, name, email) {
 const browser = await launch();
 
 // --- Organizer -------------------------------------------------------------
-const orgCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const orgCtx = await browser.newContext({ ...contextOpts, viewport: { width: 390, height: 844 } });
 const org = await orgCtx.newPage();
 org.on("dialog", (d) => d.accept());
 
@@ -78,7 +85,7 @@ log("organizer + 6 guests in roster");
 await shot(org, "02-roster-open");
 
 // --- Player joins via invite link ------------------------------------------
-const paulaCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const paulaCtx = await browser.newContext({ ...contextOpts, viewport: { width: 390, height: 844 } });
 const paula = await paulaCtx.newPage();
 await paula.goto(`${BASE}/join/${code}`);
 await paula.getByText("You're invited").waitFor();
@@ -164,7 +171,7 @@ log("session finished — podium shown");
 await shot(org, "09-final");
 
 // --- Public board (no auth) -------------------------------------------------
-const tvCtx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+const tvCtx = await browser.newContext({ ...contextOpts, viewport: { width: 1280, height: 800 } });
 const tv = await tvCtx.newPage();
 await tv.goto(`${BASE}/board/${code}`);
 await tv.getByText("Leaderboard").waitFor({ timeout: 10000 });

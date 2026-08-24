@@ -638,8 +638,11 @@ function CourtCard({
         onClick={() => isOrganizer && setEditing(true)}
         disabled={!isOrganizer}
       >
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Court {m.court}</span>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2 text-2xl font-black uppercase tracking-tight text-lime-300">
+            <span aria-hidden>🏟️</span>
+            <span>Court {m.court}</span>
+          </span>
           <MatchStatusBadge m={m} />
         </div>
         <div className="space-y-1 text-sm">
@@ -716,7 +719,9 @@ function MyMatchCard({
         </span>
         <MatchStatusBadge m={myMatch} />
       </div>
-      <p className="text-center text-4xl font-black tracking-tight text-lime-300">COURT {myMatch.court}</p>
+      <p className="text-center text-4xl font-black tracking-tight text-lime-300">
+        <span aria-hidden>🏟️</span> COURT {myMatch.court}
+      </p>
       <div className="mt-4 text-center">
         <p className="text-lg font-bold">
           You + {nameOf(partner)}
