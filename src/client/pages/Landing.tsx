@@ -2,16 +2,23 @@ import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { authClient } from "../lib/auth";
 import { Button } from "../components/ui";
+import { Logo } from "../App";
+
+const steps = [
+  { icon: "📝", title: "Create a session", text: "Name, time, courts, points. Twenty seconds." },
+  { icon: "🔗", title: "Share one link", text: "Players sign up from WhatsApp. Waitlist and check-in handled." },
+  { icon: "🎾", title: "Play", text: "Americano pairings, byes and a live leaderboard — every round, automatically." },
+];
 
 function PaperSheetForm() {
   const [form, setForm] = useState({ players: 12, courts: 3, rounds: 6, points: 24 });
   const navigate = useNavigate();
   const field = (label: string, key: keyof typeof form, min: number, max: number) => (
     <label className="block text-center">
-      <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-500">{label}</span>
+      <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted">{label}</span>
       <input
         type="number"
-        className="w-16 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-center text-sm text-zinc-100 outline-none focus:border-lime-400/60"
+        className="w-16 rounded-xl border border-line-strong bg-white px-2 py-1.5 text-center text-sm text-ink outline-none focus:border-royal"
         min={min}
         max={max}
         value={form[key]}
@@ -29,9 +36,8 @@ function PaperSheetForm() {
       {field("Rounds", "rounds", 3, 8)}
       {field("Points", "points", 4, 99)}
       <Button
-        onClick={() =>
-          navigate(`/print?players=${form.players}&courts=${form.courts}&rounds=${form.rounds}&points=${form.points}`)
-        }
+        variant="secondary"
+        onClick={() => navigate(`/print?players=${form.players}&courts=${form.courts}&rounds=${form.rounds}&points=${form.points}`)}
       >
         Generate sheet →
       </Button>
@@ -39,55 +45,35 @@ function PaperSheetForm() {
   );
 }
 
-const steps = [
-  {
-    title: "Create your group",
-    text: "Sunday Padel Crew, Tuesday League — your people, one place.",
-  },
-  {
-    title: "Share one link",
-    text: "Players join from WhatsApp. Signup, waitlist and check-in handled.",
-  },
-  {
-    title: "Play",
-    text: "Americano pairings, byes and live standings — generated every round.",
-  },
-];
-
 export function Landing() {
   const { data: session, isPending } = authClient.useSession();
   if (!isPending && session) return <Navigate to="/app" replace />;
 
   return (
-    <div className="app-bg flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh flex-col bg-canvas">
       <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-5 py-5">
-        <div className="flex items-center gap-2 font-extrabold tracking-tight">
-          <span className="text-xl">🎾</span>
-          <span className="text-lg">
-            Padel<span className="text-lime-400">Time</span>
-          </span>
-        </div>
-        <Link to="/login" className="text-sm font-medium text-zinc-300 hover:text-lime-300">
+        <Logo to="/" />
+        <Link to="/login" className="text-sm font-bold text-royal hover:text-royal-dark">
           Sign in
         </Link>
       </header>
 
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center px-5 pb-16">
         <div className="max-w-xl">
-          <p className="mb-4 inline-block rounded-full border border-lime-400/30 bg-lime-400/10 px-3 py-1 text-xs font-semibold text-lime-300">
+          <p className="mb-4 inline-block rounded-full bg-lime px-3 py-1 text-xs font-bold text-navy">
             Americano · more formats coming
           </p>
-          <h1 className="text-4xl font-black leading-tight tracking-tight sm:text-6xl">
+          <h1 className="text-4xl font-black leading-tight tracking-tight text-navy sm:text-6xl">
             Padel nights that
-            <span className="text-lime-400"> run themselves.</span>
+            <span className="text-royal"> run themselves.</span>
           </h1>
-          <p className="mt-5 max-w-md text-lg text-zinc-400">
-            Signups, check-in, rotating pairings, byes, scoring and a live leaderboard — so the only
-            thing you organize is showing up.
+          <p className="mt-5 max-w-md text-lg text-muted">
+            Signups, check-in, rotating pairings, byes, scoring and a live leaderboard — so the only thing you
+            organize is showing up.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link to="/register">
-              <Button size="lg">Start a group — it's free</Button>
+              <Button size="lg">Start a session — it's free</Button>
             </Link>
             <Link to="/login">
               <Button size="lg" variant="outline">
@@ -98,24 +84,22 @@ export function Landing() {
         </div>
 
         <div className="mt-16 grid gap-4 sm:grid-cols-3">
-          {steps.map((s, i) => (
-            <div key={s.title} className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-5">
-              <span className="mb-3 inline-flex size-7 items-center justify-center rounded-full bg-lime-400 text-sm font-extrabold text-zinc-950">
-                {i + 1}
-              </span>
-              <h3 className="font-bold">{s.title}</h3>
-              <p className="mt-1 text-sm text-zinc-400">{s.text}</p>
+          {steps.map((s) => (
+            <div key={s.title} className="rounded-3xl border border-line bg-white p-5">
+              <span className="mb-3 inline-flex size-9 items-center justify-center rounded-full bg-royal-soft text-lg">{s.icon}</span>
+              <h3 className="font-black text-navy">{s.title}</h3>
+              <p className="mt-1 text-sm text-muted">{s.text}</p>
             </div>
           ))}
         </div>
 
-        <div className="mt-10 rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-6 sm:p-8">
+        <div className="mt-8 rounded-3xl border border-line bg-white p-6 sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-6">
             <div className="max-w-sm">
-              <h3 className="text-xl font-bold">Prefer pen &amp; paper? 📝</h3>
-              <p className="mt-1 text-sm text-zinc-400">
-                Print a one-page Americano score sheet — pairings, byes and tally grid pre-generated by
-                player number. Write the names in, play. No account needed.
+              <h3 className="text-xl font-black text-navy">Prefer pen &amp; paper? 📝</h3>
+              <p className="mt-1 text-sm text-muted">
+                Print a one-page Americano score sheet — pairings, byes and tally grid pre-generated by player number.
+                Write the names in, play. No account needed.
               </p>
             </div>
             <PaperSheetForm />
@@ -123,7 +107,7 @@ export function Landing() {
         </div>
       </main>
 
-      <footer className="border-t border-zinc-800/60 py-6 text-center text-xs text-zinc-600">
+      <footer className="border-t border-line py-6 text-center text-xs text-faint">
         PadelTime — the organizer gets the complexity, the players get simplicity.
       </footer>
     </div>

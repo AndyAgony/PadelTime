@@ -17,12 +17,15 @@ export interface GroupSummary {
   name: string;
   role: GroupRole;
   memberCount: number;
+  /** The user's own auto-created crew — hidden from crew lists. */
+  isPersonal: boolean;
 }
 
 export interface SessionSummary {
   id: string;
   groupId: string;
   groupName: string;
+  groupIsPersonal: boolean;
   name: string;
   status: SessionStatus;
   startsAt: number | null;
@@ -106,6 +109,7 @@ export interface SessionDetail {
   id: string;
   groupId: string;
   groupName: string;
+  groupIsPersonal: boolean;
   name: string;
   venue: string | null;
   startsAt: number | null;

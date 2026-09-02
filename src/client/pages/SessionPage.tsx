@@ -1,22 +1,41 @@
 import { Fragment, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Api, usePoll } from "../lib/api";
-import { fmtDateTime, fromLocalInputValue, toLocalInputValue } from "../lib/format";
+import { fmtTimeRange, fromLocalInputValue, toLocalInputValue } from "../lib/format";
 import { SESSION_STATUS_LABEL } from "../../shared/types";
 import type { MatchRow, PlayerRow, RoundRow, SessionDetail } from "../../shared/types";
 import { estimateRounds } from "../../shared/timing";
-import { Badge, Button, Card, CopyButton, ErrorNote, Field, Input, Modal, PageSpinner, cls } from "../components/ui";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  CopyButton,
+  ErrorNote,
+  Field,
+  IconButton,
+  Input,
+  InfoRow,
+  Modal,
+  PageSpinner,
+  ProgressBar,
+  SectionHeader,
+  StatCell,
+  cls,
+} from "../components/ui";
 import { ScoreEntry } from "../components/ScoreEntry";
 import { StandingsTable } from "../components/StandingsTable";
 import { statusTone } from "./Home";
 
 type Run = (key: string, fn: () => Promise<unknown>) => Promise<void>;
+type ViewProps = { d: SessionDetail; isOrganizer: boolean; run: Run; busyKey: string | null };
 
 export function SessionPage() {
   const { id = "" } = useParams();
   const { data, error, loading, reload } = usePoll(() => Api.session(id), 4000, [id]);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const navigate = useNavigate();
 
   const run: Run = async (key, fn) => {
@@ -40,11 +59,10 @@ export function SessionPage() {
   const isOrganizer = d.myRole === "organizer";
 
   return (
-    <div className="space-y-5">
-      <Header d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} onDeleted={() => navigate(`/app/groups/${d.groupId}`)} />
+    <div className="space-y-4">
+      <Hero d={d} isOrganizer={isOrganizer} onSettings={() => setShowSettings(true)} />
       <LifecycleStepper d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />
       <ErrorNote message={actionErr} />
-      {d.status !== "cancelled" && <RulesCard d={d} />}
 
       {d.status === "draft" && <DraftView d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />}
       {d.status === "open" && <OpenView d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />}
@@ -53,67 +71,210 @@ export function SessionPage() {
       {d.status === "complete" && <CompleteView d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />}
       {d.status === "cancelled" && (
         <Card>
-          <p className="text-zinc-400">This session was cancelled.</p>
+          <p className="text-muted">This session was cancelled.</p>
         </Card>
+      )}
+
+      {d.status !== "cancelled" && <RulesCard d={d} />}
+
+      {isOrganizer && (
+        <SettingsModal
+          d={d}
+          open={showSettings}
+          onClose={() => setShowSettings(false)}
+          run={run}
+          busyKey={busyKey}
+          onDeleted={() => navigate("/app")}
+        />
       )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
+// Hero: court banner + floating card with the essentials
 
-function Header({
-  d,
-  isOrganizer,
-  run,
-  busyKey,
-  onDeleted,
-}: {
-  d: SessionDetail;
-  isOrganizer: boolean;
-  run: Run;
-  busyKey: string | null;
-  onDeleted: () => void;
-}) {
-  const [showSettings, setShowSettings] = useState(false);
+function Hero({ d, isOrganizer, onSettings }: { d: SessionDetail; isOrganizer: boolean; onSettings: () => void }) {
+  const joinUrl = `${window.location.origin}/join/${d.inviteCode}`;
+  const shareable = ["open", "checkin", "active"].includes(d.status);
   return (
     <div>
-      <p className="text-sm text-zinc-500">
-        <Link to={`/app/groups/${d.groupId}`} className="hover:text-lime-300">
-          {d.groupName}
-        </Link>
-      </p>
-      <div className="flex items-start justify-between gap-3">
-        <h1 className="text-2xl font-black tracking-tight">{d.name}</h1>
-        {isOrganizer && (
-          <div className="flex shrink-0 gap-1">
-            <a href={`/print?session=${d.id}`} target="_blank" rel="noreferrer" title="Printable pen & paper sheet for this session">
-              <Button variant="subtle" size="sm">🖨 Print</Button>
-            </a>
-            <Button variant="subtle" size="sm" onClick={() => setShowSettings(true)}>
-              Settings
-            </Button>
+      <div className="court-banner relative h-36 rounded-3xl">
+        <div className="absolute inset-x-3 top-3 flex items-center justify-between">
+          <Link to="/app" aria-label="Back to sessions">
+            <span className="flex size-10 items-center justify-center rounded-full bg-white text-navy shadow-md">←</span>
+          </Link>
+          <div className="flex gap-2">
+            {shareable && (
+              <IconButton
+                label="Copy invite link"
+                onClick={async (e) => {
+                  const el = e.currentTarget;
+                  try {
+                    await navigator.clipboard.writeText(joinUrl);
+                    el.textContent = "✓";
+                    setTimeout(() => (el.textContent = "⤴"), 1200);
+                  } catch {
+                    window.prompt("Copy this link:", joinUrl);
+                  }
+                }}
+              >
+                ⤴
+              </IconButton>
+            )}
+            {isOrganizer && (
+              <a href={`/print?session=${d.id}`} target="_blank" rel="noreferrer">
+                <IconButton label="Printable pen & paper sheet">🖨</IconButton>
+              </a>
+            )}
+            {isOrganizer && (
+              <IconButton label="Settings" onClick={onSettings}>
+                ⋯
+              </IconButton>
+            )}
           </div>
-        )}
+        </div>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Badge tone={statusTone(d.status)}>{SESSION_STATUS_LABEL[d.status]}</Badge>
-        <Badge tone="zinc">Americano · {d.pointsPerMatch} pts</Badge>
-        <Badge tone="zinc">
-          {d.courts} court{d.courts === 1 ? "" : "s"}
-        </Badge>
-        <span className="text-sm text-zinc-400">
-          {fmtDateTime(d.startsAt)}
-          {d.durationMin ? ` · ${d.durationMin} min` : ""}
-          {d.venue ? ` · ${d.venue}` : ""}
-        </span>
-      </div>
-      {isOrganizer && (
-        <SettingsModal d={d} open={showSettings} onClose={() => setShowSettings(false)} run={run} busyKey={busyKey} onDeleted={onDeleted} />
-      )}
+      <Card className="relative -mt-12 mx-3 shadow-lg">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-black leading-tight tracking-tight text-navy">{d.name}</h1>
+            <p className="mt-1 text-sm text-muted">{fmtTimeRange(d.startsAt, d.durationMin)}</p>
+            {d.venue && <p className="text-sm text-muted">📍 {d.venue}</p>}
+          </div>
+          <Badge tone={statusTone(d.status)} className="shrink-0">
+            {SESSION_STATUS_LABEL[d.status]}
+          </Badge>
+        </div>
+        <div className="mt-4 grid grid-cols-4 gap-2 border-t border-line pt-4">
+          <StatCell label="Format" value="Americano" />
+          <StatCell label="Points" value={d.pointsPerMatch} />
+          <StatCell label="Courts" value={d.courts} />
+          <StatCell label="Time" value={d.durationMin ? `${d.durationMin}m` : "—"} />
+        </div>
+      </Card>
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// The session journey: Players → Check-in → Play → Results
+
+const STEPS = [
+  { label: "Players", statuses: ["draft", "open"] },
+  { label: "Check-in", statuses: ["checkin"] },
+  { label: "Play", statuses: ["active"] },
+  { label: "Results", statuses: ["complete"] },
+] as const;
+
+function LifecycleStepper({ d, isOrganizer, run, busyKey }: ViewProps) {
+  if (d.status === "cancelled") return null;
+  const current = STEPS.findIndex((s) => (s.statuses as readonly string[]).includes(d.status));
+
+  const advance = (target: number) => {
+    if (!isOrganizer || target <= current || busyKey) return;
+    if (d.status === "active" && target === 3) {
+      if (window.confirm("Finish the session and lock the final standings?")) {
+        run("finish", () => Api.sessionAction(d.id, "complete"));
+      }
+      return;
+    }
+    if (target === 1) run("checkin", () => Api.sessionAction(d.id, "start_checkin"));
+    if (target === 2) run("start", () => Api.sessionAction(d.id, "start"));
+  };
+
+  return (
+    <div className="no-scrollbar flex items-center gap-1 overflow-x-auto px-1 py-1">
+      {STEPS.map((s, i) => {
+        const done = i < current;
+        const cur = i === current;
+        const reach = current === 0 ? 2 : 1;
+        const clickable = isOrganizer && i > current && i - current <= reach && d.status !== "complete";
+        return (
+          <Fragment key={s.label}>
+            {i > 0 && <span className={cls("h-px w-3 shrink-0 sm:w-8", done || cur ? "bg-royal" : "bg-line-strong")} />}
+            <button
+              type="button"
+              disabled={!clickable}
+              onClick={() => advance(i)}
+              title={clickable ? `Go to ${s.label}` : undefined}
+              className={cls(
+                "flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold transition-colors",
+                cur
+                  ? "bg-royal text-white"
+                  : done
+                    ? "text-royal"
+                    : clickable
+                      ? "text-muted hover:bg-line hover:text-navy"
+                      : "text-faint",
+              )}
+            >
+              <span
+                className={cls(
+                  "flex size-4 items-center justify-center rounded-full text-[10px] font-black",
+                  cur ? "bg-white text-royal" : done ? "bg-royal text-white" : "bg-line text-faint",
+                )}
+              >
+                {done ? "✓" : i + 1}
+              </span>
+              {s.label}
+            </button>
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Rules
+
+function RulesCard({ d }: { d: SessionDetail }) {
+  const [open, setOpen] = useState(["draft", "open", "checkin"].includes(d.status));
+  const est = estimateRounds(d.durationMin, d.pointsPerMatch);
+  return (
+    <Card>
+      <button type="button" className="flex w-full items-center justify-between text-left" onClick={() => setOpen((o) => !o)}>
+        <span className="text-lg font-black text-navy">
+          Americano tournament <span className="text-base font-semibold text-muted">— the rules</span>
+        </span>
+        <span className="text-faint">{open ? "▴" : "▾"}</span>
+      </button>
+      {open && (
+        <div className="mt-2 divide-y divide-line">
+          <InfoRow icon="🔄">
+            <b>New partner every round.</b> Pairings rotate for maximum variety — it's you against the field, not fixed
+            teams.
+          </InfoRow>
+          <InfoRow icon="🎯">
+            Each match is one game to <b>{d.pointsPerMatch} total rally points</b> (e.g. 14–10). Every point counts,
+            serve rotates, no deuce.
+          </InfoRow>
+          <InfoRow icon="🧮">
+            <b>You score as an individual</b> — both players on a team bank the team's points.
+          </InfoRow>
+          <InfoRow icon="🏟️">
+            {d.courts} court{d.courts === 1 ? "" : "s"} per round. Extra players sit out, and sit-outs rotate so everyone
+            rests about equally.
+          </InfoRow>
+          <InfoRow icon="✅">Players enter the score, the other team confirms it. The organizer can always correct it.</InfoRow>
+          <InfoRow icon="🏆">
+            <b>Most total points at the end wins.</b> Ties are allowed.
+          </InfoRow>
+          {est && (
+            <InfoRow icon="⏱">
+              {d.durationMin} min of court time fits roughly <b>{est} rounds</b> — rounds keep coming as long as you want
+              to play.
+            </InfoRow>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Settings
 
 function SettingsModal({
   d,
@@ -150,12 +311,9 @@ function SettingsModal({
         <Field label="Name">
           <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </Field>
-        <Field label="When">
-          <Input type="datetime-local" value={form.when} onChange={(e) => setForm({ ...form, when: e.target.value })} />
-        </Field>
         <div className="grid grid-cols-[1fr_auto] gap-3">
-          <Field label="Venue">
-            <Input value={form.venue} onChange={(e) => setForm({ ...form, venue: e.target.value })} />
+          <Field label="When">
+            <Input type="datetime-local" value={form.when} onChange={(e) => setForm({ ...form, when: e.target.value })} />
           </Field>
           <Field label="Court time (min)">
             <Input
@@ -169,6 +327,9 @@ function SettingsModal({
             />
           </Field>
         </div>
+        <Field label="Venue">
+          <Input value={form.venue} onChange={(e) => setForm({ ...form, venue: e.target.value })} />
+        </Field>
         <div className="grid grid-cols-3 gap-3">
           <Field label="Courts">
             <Input type="number" min={1} max={12} value={form.courts} onChange={(e) => setForm({ ...form, courts: num(e.target.value, d.courts) })} />
@@ -180,7 +341,7 @@ function SettingsModal({
             <Input type="number" min={4} max={99} disabled={!preActive} value={form.pointsPerMatch} onChange={(e) => setForm({ ...form, pointsPerMatch: num(e.target.value, d.pointsPerMatch) })} />
           </Field>
         </div>
-        {!preActive && <p className="text-xs text-zinc-500">Max players and points lock once the session starts. Courts can change any time.</p>}
+        {!preActive && <p className="text-xs text-muted">Max players and points lock once the session starts. Courts can change any time.</p>}
         <Button
           className="w-full"
           busy={busyKey === "settings"}
@@ -201,7 +362,10 @@ function SettingsModal({
         >
           Save changes
         </Button>
-        <div className="flex gap-2 border-t border-zinc-800 pt-4">
+        <div className="flex flex-wrap gap-2 border-t border-line pt-4">
+          <a href={`/board/${d.inviteCode}`} target="_blank" rel="noreferrer">
+            <Button variant="secondary" size="sm">📺 Open TV board</Button>
+          </a>
           {d.status !== "complete" && (
             <Button
               variant="danger"
@@ -239,141 +403,25 @@ function SettingsModal({
 }
 
 // ---------------------------------------------------------------------------
+// Shared cards
 
-// The session journey, always visible: Players → Check-in → Play → Results.
-// Organizers can click ahead to advance (same validations as the buttons).
-const STEPS = [
-  { label: "Players", statuses: ["draft", "open"] },
-  { label: "Check-in", statuses: ["checkin"] },
-  { label: "Play", statuses: ["active"] },
-  { label: "Results", statuses: ["complete"] },
-] as const;
-
-function LifecycleStepper({ d, isOrganizer, run, busyKey }: ViewProps) {
-  if (d.status === "cancelled") return null;
-  const current = STEPS.findIndex((s) => (s.statuses as readonly string[]).includes(d.status));
-
-  const advance = (target: number) => {
-    if (!isOrganizer || target <= current || busyKey) return;
-    if (d.status === "active" && target === 3) {
-      if (window.confirm("Finish the session and lock the final standings?")) {
-        run("finish", () => Api.sessionAction(d.id, "complete"));
-      }
-      return;
-    }
-    if (target === 1) run("checkin", () => Api.sessionAction(d.id, "start_checkin"));
-    if (target === 2) run("start", () => Api.sessionAction(d.id, "start"));
-  };
-
-  return (
-    <div className="flex items-center gap-1 overflow-x-auto py-1">
-      {STEPS.map((s, i) => {
-        const done = i < current;
-        const cur = i === current;
-        const reach = current === 0 ? 2 : 1; // from Players you can jump straight to Play
-        const clickable = isOrganizer && i > current && i - current <= reach && d.status !== "complete";
-        return (
-          <Fragment key={s.label}>
-            {i > 0 && <span className={cls("h-px w-3 shrink-0 sm:w-8", done || cur ? "bg-lime-400/60" : "bg-zinc-800")} />}
-            <button
-              type="button"
-              disabled={!clickable}
-              onClick={() => advance(i)}
-              title={clickable ? `Go to ${s.label}` : undefined}
-              className={cls(
-                "flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors",
-                cur
-                  ? "bg-lime-400/15 text-lime-300 ring-1 ring-lime-400/40"
-                  : done
-                    ? "text-lime-400/80"
-                    : clickable
-                      ? "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-                      : "text-zinc-600",
-              )}
-            >
-              <span
-                className={cls(
-                  "flex size-4 items-center justify-center rounded-full text-[10px] font-black",
-                  cur ? "bg-lime-400 text-zinc-950" : done ? "bg-lime-400/80 text-zinc-950" : "bg-zinc-800 text-zinc-500",
-                )}
-              >
-                {done ? "✓" : i + 1}
-              </span>
-              {s.label}
-            </button>
-          </Fragment>
-        );
-      })}
-    </div>
-  );
-}
-
-function RulesCard({ d }: { d: SessionDetail }) {
-  const [open, setOpen] = useState(["draft", "open", "checkin"].includes(d.status));
-  return (
-    <Card className="py-3">
-      <button type="button" className="flex w-full items-center justify-between text-left" onClick={() => setOpen((o) => !o)}>
-        <span className="font-bold">
-          📖 Americano tournament — <span className="font-semibold text-zinc-300">the rules</span>
-        </span>
-        <span className="text-zinc-500">{open ? "▴" : "▾"}</span>
-      </button>
-      {open && (
-        <ul className="mt-3 space-y-1.5 text-sm text-zinc-300">
-          <li>
-            🔄 <b>New partner every round.</b> Pairings rotate for maximum variety of partners and opponents — it's you
-            against the field, not fixed teams.
-          </li>
-          <li>
-            🎯 Each match is one game to <b>{d.pointsPerMatch} total rally points</b> (e.g. 14–10). Every point counts,
-            serve rotates, no deuce.
-          </li>
-          <li>
-            🧮 <b>You score as an individual</b> — both players on a team bank the team's points.
-          </li>
-          <li>
-            🏟️ {d.courts} court{d.courts === 1 ? "" : "s"} per round. Extra players sit out, and sit-outs rotate so
-            everyone rests about equally.
-          </li>
-          <li>
-            ✅ Players enter the score, the other team confirms it. The organizer can always correct a score.
-          </li>
-          <li>
-            🏆 <b>Most total points at the end wins.</b> Ties are allowed.
-          </li>
-          {d.durationMin && estimateRounds(d.durationMin, d.pointsPerMatch) && (
-            <li>
-              ⏱ {d.durationMin} min of court time fits roughly{" "}
-              <b>{estimateRounds(d.durationMin, d.pointsPerMatch)} rounds</b> — but rounds keep coming as long as you
-              want to play.
-            </li>
-          )}
-        </ul>
-      )}
-    </Card>
-  );
-}
-
-function ShareCard({ d }: { d: SessionDetail }) {
+function InviteCard({ d }: { d: SessionDetail }) {
   const joinUrl = `${window.location.origin}/join/${d.inviteCode}`;
   const boardUrl = `${window.location.origin}/board/${d.inviteCode}`;
   return (
     <Card>
-      <h3 className="mb-1 font-bold">Invite players</h3>
-      <p className="mb-3 text-sm text-zinc-400">Drop this link in the group chat — players sign up themselves.</p>
-      <div className="mb-3 truncate rounded-xl bg-zinc-950/80 px-3 py-2.5 font-mono text-xs text-lime-300">{joinUrl}</div>
+      <SectionHeader title="Invite players" />
+      <p className="mb-3 text-sm text-muted">Drop this link in the group chat — players sign up themselves.</p>
+      <div className="mb-3 truncate rounded-2xl bg-canvas px-3 py-2.5 font-mono text-xs text-royal">{joinUrl}</div>
       <div className="flex flex-wrap gap-2">
-        <CopyButton text={joinUrl} label="Copy join link" />
-        <CopyButton text={boardUrl} label="Copy board link (TV)" />
-        <a href={boardUrl} target="_blank" rel="noreferrer">
-          <Button variant="subtle" size="sm">Open board ↗</Button>
-        </a>
+        <CopyButton text={joinUrl} label="Copy join link" variant="primary" />
+        <CopyButton text={boardUrl} label="Copy TV board link" />
       </div>
     </Card>
   );
 }
 
-function playerTone(p: PlayerRow) {
+function playerStatusBadge(p: PlayerRow) {
   switch (p.status) {
     case "checked_in":
       return <Badge tone="lime">here</Badge>;
@@ -386,57 +434,51 @@ function playerTone(p: PlayerRow) {
   }
 }
 
-function RosterCard({
-  d,
-  isOrganizer,
-  run,
-  busyKey,
-  checkinMode = false,
-}: {
-  d: SessionDetail;
-  isOrganizer: boolean;
-  run: Run;
-  busyKey: string | null;
-  checkinMode?: boolean;
-}) {
+function PlayersCard({ d, isOrganizer, run, busyKey, checkinMode = false }: ViewProps & { checkinMode?: boolean }) {
   const [guestName, setGuestName] = useState("");
   const visible = d.players.filter((p) => p.status !== "dropped");
   const dropped = d.players.filter((p) => p.status === "dropped");
+  const inCount = d.counts.confirmed + d.counts.checkedIn;
   return (
     <Card>
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-bold">Players</h3>
-        <span className="text-sm text-zinc-400">
-          {d.counts.confirmed + d.counts.checkedIn}/{d.maxPlayers}
-          {d.counts.waitlist > 0 && ` · ${d.counts.waitlist} waitlisted`}
-        </span>
-      </div>
-      {visible.length === 0 && <p className="py-4 text-center text-sm text-zinc-500">Nobody yet — share the invite link.</p>}
-      <ul className="divide-y divide-zinc-800/60">
+      <SectionHeader
+        title="Players"
+        action={
+          <span className="tabular text-sm font-bold text-navy">
+            {inCount} <span className="font-medium text-muted">/ {d.maxPlayers}</span>
+          </span>
+        }
+      />
+      <ProgressBar value={inCount} max={d.maxPlayers} className="mb-1" />
+      <p className="mb-3 text-xs text-muted">
+        {inCount < 4 ? `Needs at least 4 players` : `${Math.min(d.courts, Math.floor(inCount / 4))} court${Math.min(d.courts, Math.floor(inCount / 4)) === 1 ? "" : "s"} per round`}
+        {d.counts.waitlist > 0 && ` · ${d.counts.waitlist} waitlisted`}
+      </p>
+
+      {visible.length === 0 && <p className="py-4 text-center text-sm text-muted">Nobody yet — share the invite link or add names below.</p>}
+      <ul className="divide-y divide-line">
         {visible.map((p) => (
-          <li key={p.id} className="flex items-center justify-between gap-2 py-2.5">
-            <div className="flex min-w-0 items-center gap-2">
-              {checkinMode && isOrganizer && (
-                <input
-                  type="checkbox"
-                  className="size-5 accent-lime-400"
-                  checked={p.status === "checked_in"}
-                  disabled={p.status === "waitlist"}
-                  onChange={() =>
-                    run(`p-${p.id}`, () =>
-                      Api.playerAction(d.id, p.id, p.status === "checked_in" ? "undo_checkin" : "checkin"),
-                    )
-                  }
-                />
-              )}
-              <span className="truncate font-medium">
-                {p.name}
-                {p.isGuest && <span className="ml-1.5 text-xs text-zinc-500">guest</span>}
-                {p.id === d.myPlayerId && <span className="ml-1.5 text-xs text-lime-400">you</span>}
-              </span>
-            </div>
+          <li key={p.id} className="flex items-center gap-3 py-2.5">
+            {checkinMode && isOrganizer ? (
+              <input
+                type="checkbox"
+                className="size-5 accent-royal"
+                checked={p.status === "checked_in"}
+                disabled={p.status === "waitlist"}
+                onChange={() =>
+                  run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, p.status === "checked_in" ? "undo_checkin" : "checkin"))
+                }
+              />
+            ) : (
+              <Avatar name={p.name} size="sm" ring={p.id === d.myPlayerId} />
+            )}
+            <span className="min-w-0 flex-1 truncate font-bold text-navy">
+              {p.name}
+              {p.isGuest && <span className="ml-1.5 text-xs font-medium text-faint">guest</span>}
+              {p.id === d.myPlayerId && <span className="ml-1.5 text-xs font-bold text-royal">you</span>}
+            </span>
             <div className="flex shrink-0 items-center gap-1.5">
-              {playerTone(p)}
+              {playerStatusBadge(p)}
               {isOrganizer && p.status === "waitlist" && (
                 <Button size="sm" variant="subtle" onClick={() => run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, "promote"))}>
                   Bring in
@@ -444,7 +486,7 @@ function RosterCard({
               )}
               {isOrganizer && (
                 <button
-                  className="rounded-md px-1.5 py-1 text-zinc-600 hover:bg-zinc-800 hover:text-rose-300"
+                  className="rounded-full px-2 py-1 text-faint hover:bg-rose-soft hover:text-rose-dark"
                   title="Remove from session"
                   onClick={() => run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, "drop"))}
                 >
@@ -456,9 +498,9 @@ function RosterCard({
         ))}
       </ul>
       {dropped.length > 0 && isOrganizer && (
-        <div className="mt-2 border-t border-zinc-800/60 pt-2">
+        <div className="mt-2 border-t border-line pt-2">
           {dropped.map((p) => (
-            <div key={p.id} className="flex items-center justify-between py-1.5 text-sm text-zinc-500">
+            <div key={p.id} className="flex items-center justify-between py-1.5 text-sm text-muted">
               <span className="line-through">{p.name}</span>
               <Button size="sm" variant="subtle" onClick={() => run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, "restore"))}>
                 Restore
@@ -467,21 +509,16 @@ function RosterCard({
           ))}
         </div>
       )}
-      {isOrganizer && !d.myPlayerId && ["open", "checkin"].includes(d.status) && (
-        <div className="mt-3 border-t border-zinc-800/60 pt-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            busy={busyKey === "selfjoin"}
-            onClick={() => run("selfjoin", () => Api.join(d.inviteCode))}
-          >
+      {isOrganizer && !d.myPlayerId && ["draft", "open", "checkin"].includes(d.status) && (
+        <div className="mt-3 border-t border-line pt-3">
+          <Button variant="secondary" size="sm" busy={busyKey === "selfjoin"} onClick={() => run("selfjoin", () => Api.join(d.inviteCode))}>
             + I'm playing too
           </Button>
         </div>
       )}
       {isOrganizer && (
         <form
-          className="mt-3 flex gap-2 border-t border-zinc-800/60 pt-3"
+          className="mt-3 flex gap-2 border-t border-line pt-3"
           onSubmit={(e) => {
             e.preventDefault();
             if (!guestName.trim()) return;
@@ -492,7 +529,7 @@ function RosterCard({
           }}
         >
           <Input value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Add player by name (no account needed)" />
-          <Button variant="ghost" busy={busyKey === "guest"} type="submit">
+          <Button variant="secondary" busy={busyKey === "guest"} type="submit">
             Add
           </Button>
         </form>
@@ -505,21 +542,21 @@ function MyStatusCard({ d, run, busyKey }: { d: SessionDetail; run: Run; busyKey
   const me = d.players.find((p) => p.id === d.myPlayerId);
   if (!me || me.status === "dropped") return null;
   return (
-    <Card className="border-lime-400/20">
+    <Card className="border-royal/30 bg-royal-soft/40">
       {me.status === "waitlist" ? (
-        <p className="text-sm text-amber-300">You're on the waitlist — you'll move up automatically if a spot opens.</p>
+        <p className="text-sm font-semibold text-amber-dark">You're on the waitlist — you'll move up automatically if a spot opens.</p>
       ) : d.status === "checkin" && me.status === "confirmed" ? (
         <div className="flex items-center justify-between gap-3">
-          <p className="font-semibold">At the club?</p>
+          <p className="font-bold text-navy">At the club?</p>
           <Button busy={busyKey === "selfcheckin"} onClick={() => run("selfcheckin", () => Api.selfCheckin(d.id))}>
             ✓ I'm here
           </Button>
         </div>
       ) : me.status === "checked_in" ? (
-        <p className="text-sm text-lime-300">You're checked in. Pairings drop when the organizer starts the session.</p>
+        <p className="text-sm font-semibold text-navy">You're checked in. Pairings drop when the organizer starts the session.</p>
       ) : (
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-zinc-300">You're in ✓</p>
+          <p className="text-sm font-semibold text-navy">You're in ✓</p>
           <Button variant="subtle" size="sm" busy={busyKey === "leave"} onClick={() => run("leave", () => Api.leave(d.id))}>
             Can't make it
           </Button>
@@ -529,8 +566,6 @@ function MyStatusCard({ d, run, busyKey }: { d: SessionDetail; run: Run; busyKey
   );
 }
 
-// ---------------------------------------------------------------------------
-
 function StartPreview({ d }: { d: SessionDetail }) {
   const ready = d.counts.confirmed + d.counts.checkedIn;
   const courtsUsed = Math.min(d.courts, Math.floor(ready / 4));
@@ -538,19 +573,19 @@ function StartPreview({ d }: { d: SessionDetail }) {
   const estimate = estimateRounds(d.durationMin, d.pointsPerMatch);
   if (ready === 0) return null;
   return (
-    <div className="mt-3 rounded-xl bg-zinc-950/70 px-4 py-3 text-sm">
-      <span className="font-bold text-lime-300">{ready}</span> player{ready === 1 ? "" : "s"} →{" "}
-      <span className="font-bold">{courtsUsed}</span> court{courtsUsed === 1 ? "" : "s"} per round
+    <div className="mt-3 rounded-2xl bg-canvas px-4 py-3 text-sm text-ink">
+      <span className="font-black text-navy">{ready}</span> player{ready === 1 ? "" : "s"} →{" "}
+      <span className="font-black text-navy">{courtsUsed}</span> court{courtsUsed === 1 ? "" : "s"} per round
       {courtsUsed > 0 && byes > 0 && (
         <>
           {" "}
-          · <span className="font-bold">{byes}</span> sitting each round
+          · <span className="font-black text-navy">{byes}</span> sitting each round
         </>
       )}
-      {courtsUsed === 0 && <span className="text-amber-300"> — need at least 4 to start</span>}
+      {courtsUsed === 0 && <span className="font-semibold text-amber-dark"> — need at least 4 to start</span>}
       {estimate && courtsUsed > 0 && (
-        <p className="mt-1 text-xs text-zinc-400">
-          {d.durationMin} min of court time ≈ <span className="font-bold text-zinc-200">{estimate} rounds</span> of{" "}
+        <p className="mt-1 text-xs text-muted">
+          {d.durationMin} min of court time ≈ <span className="font-bold text-navy">{estimate} rounds</span> of{" "}
           {d.pointsPerMatch} points — keep dealing rounds if you have time left.
         </p>
       )}
@@ -558,33 +593,36 @@ function StartPreview({ d }: { d: SessionDetail }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Status views
+
 function DraftView({ d, isOrganizer, run, busyKey }: ViewProps) {
   const ready = d.counts.confirmed + d.counts.checkedIn;
   return (
     <div className="space-y-4">
       {isOrganizer ? (
-        <Card className="border-lime-400/30">
-          <h3 className="font-bold">Get the session going</h3>
-          <p className="mt-1 text-sm text-zinc-400">
-            Add players by name below and start whenever you have enough — or open signup and share
-            the invite link so people join themselves.
+        <Card className="border-royal/30">
+          <SectionHeader title="Get the session going" />
+          <p className="text-sm text-muted">
+            Add players by name below and start whenever you have enough — or open signup and share the invite link
+            so people join themselves.
           </p>
           <StartPreview d={d} />
           <div className="mt-4 flex flex-wrap gap-2">
             <Button busy={busyKey === "start"} disabled={ready < 4} onClick={() => run("start", () => Api.sessionAction(d.id, "start"))}>
               Start session →
             </Button>
-            <Button variant="ghost" busy={busyKey === "open"} onClick={() => run("open", () => Api.sessionAction(d.id, "open"))}>
+            <Button variant="secondary" busy={busyKey === "open"} onClick={() => run("open", () => Api.sessionAction(d.id, "open"))}>
               Open signup
             </Button>
           </div>
         </Card>
       ) : (
         <Card>
-          <p className="text-zinc-400">Signup hasn't opened yet.</p>
+          <p className="text-muted">Signup hasn't opened yet.</p>
         </Card>
       )}
-      <RosterCard d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />
+      <PlayersCard d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />
     </div>
   );
 }
@@ -593,13 +631,13 @@ function OpenView({ d, isOrganizer, run, busyKey }: ViewProps) {
   return (
     <div className="space-y-4">
       <MyStatusCard d={d} run={run} busyKey={busyKey} />
-      <ShareCard d={d} />
+      <InviteCard d={d} />
       {isOrganizer && (
-        <Card className="border-lime-400/30">
-          <h3 className="font-bold">Game day?</h3>
-          <p className="mt-1 text-sm text-zinc-400">
-            Start now to play with everyone who's signed up, or run check-in first so only the people
-            actually at the club get scheduled.
+        <Card className="border-royal/30">
+          <SectionHeader title="Game day?" />
+          <p className="text-sm text-muted">
+            Start now to play with everyone who's signed up, or run check-in first so only the people actually at the
+            club get scheduled.
           </p>
           <StartPreview d={d} />
           <div className="mt-4 flex flex-wrap gap-2">
@@ -610,13 +648,13 @@ function OpenView({ d, isOrganizer, run, busyKey }: ViewProps) {
             >
               Start session →
             </Button>
-            <Button variant="ghost" busy={busyKey === "checkin"} onClick={() => run("checkin", () => Api.sessionAction(d.id, "start_checkin"))}>
+            <Button variant="secondary" busy={busyKey === "checkin"} onClick={() => run("checkin", () => Api.sessionAction(d.id, "start_checkin"))}>
               Start check-in
             </Button>
           </div>
         </Card>
       )}
-      <RosterCard d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />
+      <PlayersCard d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />
     </div>
   );
 }
@@ -629,45 +667,35 @@ function CheckinView({ d, isOrganizer, run, busyKey }: ViewProps) {
     <div className="space-y-4">
       <MyStatusCard d={d} run={run} busyKey={busyKey} />
       {isOrganizer && (
-        <Card className="border-lime-400/30">
-          <h3 className="font-bold">Check-in</h3>
-          <p className="mt-1 text-sm text-zinc-400">
-            Only checked-in players get scheduled — one no-show can wreck a round otherwise.
-          </p>
-          <div className="mt-3 rounded-xl bg-zinc-950/70 px-4 py-3 text-sm">
-            <span className="font-bold text-lime-300">{n}</span> checked in →{" "}
-            <span className="font-bold">{courtsUsed}</span> court{courtsUsed === 1 ? "" : "s"} per round
+        <Card className="border-royal/30">
+          <SectionHeader title="Check-in" />
+          <p className="text-sm text-muted">Only checked-in players get scheduled — one no-show can wreck a round otherwise.</p>
+          <div className="mt-3 rounded-2xl bg-canvas px-4 py-3 text-sm text-ink">
+            <span className="font-black text-navy">{n}</span> checked in → <span className="font-black text-navy">{courtsUsed}</span> court
+            {courtsUsed === 1 ? "" : "s"} per round
             {courtsUsed > 0 && byes > 0 && (
               <>
                 {" "}
-                · <span className="font-bold">{byes}</span> sitting each round
+                · <span className="font-black text-navy">{byes}</span> sitting each round
               </>
             )}
-            {courtsUsed === 0 && <span className="text-amber-300"> — need at least 4</span>}
+            {courtsUsed === 0 && <span className="font-semibold text-amber-dark"> — need at least 4</span>}
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button variant="ghost" busy={busyKey === "checkin_all"} onClick={() => run("checkin_all", () => Api.sessionAction(d.id, "checkin_all"))}>
+            <Button variant="secondary" busy={busyKey === "checkin_all"} onClick={() => run("checkin_all", () => Api.sessionAction(d.id, "checkin_all"))}>
               Everyone's here
             </Button>
-            <Button
-              busy={busyKey === "start"}
-              disabled={courtsUsed === 0}
-              onClick={() => run("start", () => Api.sessionAction(d.id, "start"))}
-            >
+            <Button busy={busyKey === "start"} disabled={courtsUsed === 0} onClick={() => run("start", () => Api.sessionAction(d.id, "start"))}>
               Start session →
             </Button>
           </div>
         </Card>
       )}
-      <RosterCard d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} checkinMode />
-      <ShareCard d={d} />
+      <PlayersCard d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} checkinMode />
+      <InviteCard d={d} />
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-
-type ViewProps = { d: SessionDetail; isOrganizer: boolean; run: Run; busyKey: string | null };
 
 function teamNames(ids: [string, string], nameOf: (id: string) => string): string {
   return `${nameOf(ids[0])} + ${nameOf(ids[1])}`;
@@ -686,56 +714,63 @@ function MatchStatusBadge({ m }: { m: MatchRow }) {
   }
 }
 
-function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
-  const nameOf = useMemo(() => {
+function useNameOf(d: SessionDetail) {
+  return useMemo(() => {
     const map = new Map(d.players.map((p) => [p.id, p.name]));
     return (pid: string) => map.get(pid) ?? "?";
   }, [d.players]);
+}
 
+function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
+  const nameOf = useNameOf(d);
   const current = d.rounds[d.rounds.length - 1];
   const previous = d.rounds.slice(0, -1);
   const [showRoster, setShowRoster] = useState(false);
+  const est = estimateRounds(d.durationMin, d.pointsPerMatch);
 
   return (
     <div className="space-y-4">
       {isOrganizer && d.warnings.length > 0 && (
-        <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
+        <div className="rounded-2xl bg-amber-soft px-4 py-3 text-sm font-medium text-amber-dark">
           {d.warnings.map((w, i) => (
             <p key={i}>⚠ {w}</p>
           ))}
         </div>
       )}
 
-      {!isOrganizer && d.myPlayerId && current && (
-        <MyMatchCard d={d} round={current} nameOf={nameOf} run={run} busyKey={busyKey} />
-      )}
+      {!isOrganizer && d.myPlayerId && current && <MyMatchCard d={d} round={current} nameOf={nameOf} run={run} busyKey={busyKey} />}
 
       {current && (
         <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-lg font-black">
-              Round {current.number}
-              {(() => {
-                const est = estimateRounds(d.durationMin, d.pointsPerMatch);
-                if (!est) return null;
-                return (
-                  <span className="ml-1.5 text-sm font-medium text-zinc-500">
+          <SectionHeader
+            title={
+              <>
+                Round {current.number}
+                {est && (
+                  <span className="ml-1.5 text-sm font-semibold text-muted">
                     {current.number <= est ? `of ~${est}` : "· extra time"}
                   </span>
-                );
-              })()}
-            </h3>
-            {current.complete ? <Badge tone="lime">all scores in</Badge> : <Badge tone="zinc">{current.matches.filter((m) => m.status === "confirmed").length}/{current.matches.length} scored</Badge>}
-          </div>
+                )}
+              </>
+            }
+            action={
+              current.complete ? (
+                <Badge tone="lime">all scores in</Badge>
+              ) : (
+                <Badge tone="zinc">
+                  {current.matches.filter((m) => m.status === "confirmed").length}/{current.matches.length} scored
+                </Badge>
+              )
+            }
+          />
           <div className="grid gap-3 sm:grid-cols-2">
             {current.matches.map((m) => (
               <CourtCard key={m.id} d={d} m={m} nameOf={nameOf} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />
             ))}
           </div>
           {current.byes.length > 0 && (
-            <p className="mt-3 text-sm text-zinc-400">
-              <span className="font-semibold text-zinc-300">Sitting this round:</span>{" "}
-              {current.byes.map(nameOf).join(" · ")}
+            <p className="mt-3 text-sm text-muted">
+              <span className="font-bold text-navy">Sitting this round:</span> {current.byes.map(nameOf).join(" · ")}
             </p>
           )}
         </Card>
@@ -743,7 +778,7 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
 
       {isOrganizer && current && (
         <Card>
-          <h3 className="mb-3 font-bold">Organizer controls</h3>
+          <SectionHeader title="Organizer controls" />
           <div className="flex flex-wrap gap-2">
             <Button
               busy={busyKey === "next"}
@@ -756,7 +791,7 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
             </Button>
             {!current.matches.some((m) => m.status === "confirmed") && (
               <Button
-                variant="ghost"
+                variant="secondary"
                 busy={busyKey === "regen"}
                 onClick={() => {
                   if (window.confirm("Throw away these pairings and draw new ones?")) run("regen", () => Api.nextRound(d.id, { regenerate: true }));
@@ -784,20 +819,20 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
               Finish session
             </Button>
           </div>
-          <button className="mt-3 text-sm text-zinc-400 underline-offset-4 hover:text-lime-300 hover:underline" onClick={() => setShowRoster((s) => !s)}>
+          <button className="mt-3 text-sm font-semibold text-royal hover:text-royal-dark" onClick={() => setShowRoster((s) => !s)}>
             {showRoster ? "Hide players" : "Manage players (late arrivals, drop-outs)"}
           </button>
           {showRoster && (
             <div className="mt-3">
-              <RosterCard d={d} isOrganizer run={run} busyKey={busyKey} />
-              <p className="mt-2 text-xs text-zinc-500">Changes apply from the next generated round.</p>
+              <PlayersCard d={d} isOrganizer run={run} busyKey={busyKey} />
+              <p className="mt-2 text-xs text-muted">Changes apply from the next generated round.</p>
             </div>
           )}
         </Card>
       )}
 
       <Card>
-        <h3 className="mb-3 font-bold">Standings</h3>
+        <SectionHeader title="Standings" />
         <StandingsTable standings={d.standings} highlightId={d.myPlayerId} />
       </Card>
 
@@ -827,30 +862,30 @@ function CourtCard({
     <>
       <button
         className={cls(
-          "rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-left transition-colors",
-          isOrganizer && "hover:border-lime-400/50",
+          "rounded-2xl border border-line bg-canvas/60 p-4 text-left transition-colors",
+          isOrganizer && "hover:border-royal hover:bg-royal-soft/40",
         )}
         onClick={() => isOrganizer && setEditing(true)}
         disabled={!isOrganizer}
       >
         <div className="mb-3 flex items-center justify-between gap-2">
-          <span className="flex items-center gap-2 text-2xl font-black uppercase tracking-tight text-lime-300">
+          <span className="flex items-center gap-2 text-2xl font-black uppercase tracking-tight text-royal">
             <span aria-hidden>🏟️</span>
             <span>Court {m.court}</span>
           </span>
           <MatchStatusBadge m={m} />
         </div>
-        <div className="space-y-1 text-sm">
+        <div className="space-y-1.5 text-sm">
           <div className="flex items-center justify-between gap-2">
-            <span className="min-w-0 truncate font-semibold">{teamNames(m.a, nameOf)}</span>
-            <span className="tabular text-xl font-extrabold text-lime-300">{m.scoreA ?? "–"}</span>
+            <span className="min-w-0 truncate font-bold text-navy">{teamNames(m.a, nameOf)}</span>
+            <span className="tabular text-2xl font-black text-navy">{m.scoreA ?? "–"}</span>
           </div>
           <div className="flex items-center justify-between gap-2">
-            <span className="min-w-0 truncate font-semibold">{teamNames(m.b, nameOf)}</span>
-            <span className="tabular text-xl font-extrabold text-lime-300">{m.scoreB ?? "–"}</span>
+            <span className="min-w-0 truncate font-bold text-navy">{teamNames(m.b, nameOf)}</span>
+            <span className="tabular text-2xl font-black text-navy">{m.scoreB ?? "–"}</span>
           </div>
         </div>
-        {isOrganizer && <p className="mt-2 text-xs text-zinc-600">{scored ? "Tap to edit score" : "Tap to enter score"}</p>}
+        {isOrganizer && <p className="mt-2 text-xs text-faint">{scored ? "Tap to edit score" : "Tap to enter score"}</p>}
       </button>
       <Modal open={editing} onClose={() => setEditing(false)} title={`Court ${m.court} — score`}>
         <ScoreEntry
@@ -891,10 +926,10 @@ function MyMatchCard({
 
   if (!myMatch) {
     return (
-      <Card className="border-amber-400/20 text-center">
+      <Card className="border-amber-soft bg-amber-soft/40 text-center">
         <p className="text-3xl">🧘</p>
-        <p className="mt-1 font-bold">You're sitting round {round.number} out</p>
-        <p className="text-sm text-zinc-400">Grab a drink — you're back in the next one.</p>
+        <p className="mt-1 font-black text-navy">You're sitting round {round.number} out</p>
+        <p className="text-sm text-muted">Grab a drink — you're back in the next one.</p>
       </Card>
     );
   }
@@ -907,25 +942,33 @@ function MyMatchCard({
   const scoreLine = myMatch.scoreA != null ? `${myMatch.scoreA}–${myMatch.scoreB}` : null;
 
   return (
-    <Card className="border-lime-400/30">
+    <Card className="border-royal/40 shadow-md">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-          Round {round.number} · your match
-        </span>
+        <span className="text-xs font-bold uppercase tracking-wider text-muted">Round {round.number} · your match</span>
         <MatchStatusBadge m={myMatch} />
       </div>
-      <p className="text-center text-4xl font-black tracking-tight text-lime-300">
+      <p className="text-center text-4xl font-black tracking-tight text-royal">
         <span aria-hidden>🏟️</span> COURT {myMatch.court}
       </p>
-      <div className="mt-4 text-center">
-        <p className="text-lg font-bold">
-          You + {nameOf(partner)}
-        </p>
-        <p className="my-1 text-xs font-bold uppercase tracking-widest text-zinc-500">vs</p>
-        <p className="text-lg font-bold">{teamNames(opponents, nameOf)}</p>
+      <div className="mt-4 flex items-center justify-center gap-4">
+        <div className="flex flex-col items-center gap-1">
+          <div className="flex -space-x-2">
+            <Avatar name={nameOf(me)} ring />
+            <Avatar name={nameOf(partner)} />
+          </div>
+          <p className="text-sm font-bold text-navy">You + {nameOf(partner)}</p>
+        </div>
+        <span className="text-xs font-black uppercase tracking-widest text-faint">vs</span>
+        <div className="flex flex-col items-center gap-1">
+          <div className="flex -space-x-2">
+            <Avatar name={nameOf(opponents[0])} />
+            <Avatar name={nameOf(opponents[1])} />
+          </div>
+          <p className="text-sm font-bold text-navy">{teamNames(opponents, nameOf)}</p>
+        </div>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-5">
         {myMatch.status === "pending" && (
           <>
             {!editing ? (
@@ -952,15 +995,15 @@ function MyMatchCard({
         )}
 
         {myMatch.status === "submitted" && submittedByMyTeam && (
-          <p className="text-center text-sm text-zinc-400">
+          <p className="text-center text-sm text-muted">
             {scoreLine} submitted — waiting for {teamNames(opponents, nameOf)} to confirm.
           </p>
         )}
 
         {myMatch.status === "submitted" && !submittedByMyTeam && (
           <div className="space-y-2">
-            <p className="text-center text-sm text-zinc-300">
-              They submitted <span className="font-bold text-lime-300">{scoreLine}</span> — look right?
+            <p className="text-center text-sm text-ink">
+              They submitted <span className="font-black text-navy">{scoreLine}</span> — look right?
             </p>
             <div className="grid grid-cols-2 gap-2">
               <Button busy={busyKey === `confirm-${myMatch.id}`} onClick={() => run(`confirm-${myMatch.id}`, () => Api.confirmScore(myMatch.id))}>
@@ -973,15 +1016,9 @@ function MyMatchCard({
           </div>
         )}
 
-        {myMatch.status === "disputed" && (
-          <p className="text-center text-sm text-rose-300">Score disputed — the organizer will settle it.</p>
-        )}
+        {myMatch.status === "disputed" && <p className="text-center text-sm font-semibold text-rose-dark">Score disputed — the organizer will settle it.</p>}
 
-        {myMatch.status === "confirmed" && (
-          <p className="text-center text-lg font-bold text-lime-300">
-            Final: {scoreLine} ✓
-          </p>
-        )}
+        {myMatch.status === "confirmed" && <p className="text-center text-lg font-black text-navy">Final: {scoreLine} ✓</p>}
       </div>
     </Card>
   );
@@ -992,28 +1029,24 @@ function RoundHistory({ rounds, nameOf }: { rounds: RoundRow[]; nameOf: (id: str
   return (
     <Card>
       <button className="flex w-full items-center justify-between" onClick={() => setOpen((o) => !o)}>
-        <h3 className="font-bold">Previous rounds</h3>
-        <span className="text-zinc-500">{open ? "▴" : "▾"}</span>
+        <h3 className="text-lg font-black text-navy">Previous rounds</h3>
+        <span className="text-faint">{open ? "▴" : "▾"}</span>
       </button>
       {open && (
         <div className="mt-3 space-y-4">
           {[...rounds].reverse().map((r) => (
             <div key={r.id}>
-              <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-zinc-500">Round {r.number}</p>
+              <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted">Round {r.number}</p>
               <div className="space-y-1 text-sm">
                 {r.matches.map((m) => (
                   <div key={m.id} className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-zinc-300">
-                      {teamNames(m.a, nameOf)} <span className="text-zinc-600">vs</span> {teamNames(m.b, nameOf)}
+                    <span className="min-w-0 truncate text-ink">
+                      {teamNames(m.a, nameOf)} <span className="text-faint">vs</span> {teamNames(m.b, nameOf)}
                     </span>
-                    <span className="tabular shrink-0 font-bold text-lime-300">
-                      {m.scoreA != null ? `${m.scoreA}–${m.scoreB}` : "—"}
-                    </span>
+                    <span className="tabular shrink-0 font-black text-navy">{m.scoreA != null ? `${m.scoreA}–${m.scoreB}` : "—"}</span>
                   </div>
                 ))}
-                {r.byes.length > 0 && (
-                  <p className="text-xs text-zinc-500">Sat out: {r.byes.map(nameOf).join(", ")}</p>
-                )}
+                {r.byes.length > 0 && <p className="text-xs text-muted">Sat out: {r.byes.map(nameOf).join(", ")}</p>}
               </div>
             </div>
           ))}
@@ -1023,31 +1056,29 @@ function RoundHistory({ rounds, nameOf }: { rounds: RoundRow[]; nameOf: (id: str
   );
 }
 
-// ---------------------------------------------------------------------------
-
 function CompleteView({ d, isOrganizer, run, busyKey }: ViewProps) {
-  const nameOf = useMemo(() => {
-    const map = new Map(d.players.map((p) => [p.id, p.name]));
-    return (pid: string) => map.get(pid) ?? "?";
-  }, [d.players]);
+  const nameOf = useNameOf(d);
   const podium = d.standings.slice(0, 3);
   return (
     <div className="space-y-4">
       {podium.length > 0 && (
-        <Card className="border-lime-400/30 text-center">
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Final result</p>
+        <Card className="border-lime bg-lime-soft/60 text-center">
+          <p className="text-xs font-bold uppercase tracking-widest text-muted">Final result</p>
           <p className="mt-2 text-3xl">🏆</p>
-          <p className="text-2xl font-black text-lime-300">{podium[0].name}</p>
-          <p className="text-sm text-zinc-400">{podium[0].points} points</p>
+          <div className="mt-1 flex justify-center">
+            <Avatar name={podium[0].name} size="lg" ring />
+          </div>
+          <p className="mt-2 text-2xl font-black text-navy">{podium[0].name}</p>
+          <p className="text-sm text-muted">{podium[0].points} points</p>
           {podium.length > 1 && (
-            <div className="mt-4 flex justify-center gap-6 text-sm">
+            <div className="mt-4 flex justify-center gap-6 text-sm font-semibold text-ink">
               {podium[1] && (
-                <span className="text-zinc-300">
+                <span>
                   🥈 {podium[1].name} · {podium[1].points}
                 </span>
               )}
               {podium[2] && (
-                <span className="text-zinc-300">
+                <span>
                   🥉 {podium[2].name} · {podium[2].points}
                 </span>
               )}
@@ -1056,7 +1087,7 @@ function CompleteView({ d, isOrganizer, run, busyKey }: ViewProps) {
         </Card>
       )}
       <Card>
-        <h3 className="mb-3 font-bold">Standings</h3>
+        <SectionHeader title="Standings" />
         <StandingsTable standings={d.standings} highlightId={d.myPlayerId} />
       </Card>
       <RoundHistory rounds={d.rounds} nameOf={nameOf} />

@@ -73,6 +73,7 @@ export const groups = sqliteTable("groups", {
   ownerId: text("owner_id")
     .notNull()
     .references(() => user.id),
+  isPersonal: integer("is_personal", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at").notNull(),
 });
 

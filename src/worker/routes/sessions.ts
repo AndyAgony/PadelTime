@@ -36,7 +36,7 @@ sessionRoutes.get("/sessions/:id", async (c) => {
   const db = c.get("db");
   const loaded = await loadSession(db, c.req.param("id"));
   if (!loaded) return c.json({ error: "Session not found" }, 404);
-  const { session, groupName } = loaded;
+  const { session, groupName, groupIsPersonal } = loaded;
 
   const [asPlayer] = await db
     .select()
@@ -47,7 +47,7 @@ sessionRoutes.get("/sessions/:id", async (c) => {
     !!asPlayer || (await isGroupMember(db, session.groupId, u.id)) || (await canManage(db, session, u));
   if (!allowed) return c.json({ error: "You don't have access to this session" }, 403);
 
-  return c.json(await buildDetail(db, session, groupName, u.id));
+  return c.json(await buildDetail(db, session, groupName, u.id, groupIsPersonal));
 });
 
 sessionRoutes.patch("/sessions/:id", async (c) => {

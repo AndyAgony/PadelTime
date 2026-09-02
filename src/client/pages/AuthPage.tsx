@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { authClient } from "../lib/auth";
 import { Button, Card, ErrorNote, Field, Input } from "../components/ui";
+import { Logo } from "../App";
 
 // Passwordless sign-in: email → 6-digit emailed code → (first time) your name.
 // /login and /register are the same flow; accounts are created on first code.
@@ -95,21 +96,18 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   }, [code, step]);
 
   return (
-    <div className="app-bg flex min-h-dvh items-center justify-center px-4">
+    <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
       <div className="w-full max-w-sm">
-        <Link to="/" className="mb-6 flex items-center justify-center gap-2 font-extrabold tracking-tight">
-          <span className="text-2xl">🎾</span>
-          <span className="text-xl">
-            Padel<span className="text-lime-400">Time</span>
-          </span>
-        </Link>
+        <div className="mb-6 flex justify-center">
+          <Logo to="/" />
+        </div>
         <Card>
           {step === "email" && (
             <>
-              <h1 className="mb-1 text-xl font-bold">
+              <h1 className="mb-1 text-xl font-black text-navy">
                 {mode === "register" ? "Create your account" : "Sign in"}
               </h1>
-              <p className="mb-5 text-sm text-zinc-400">
+              <p className="mb-5 text-sm text-muted">
                 No passwords here — we'll email you a 6-digit code. New emails get an account
                 automatically.
               </p>
@@ -140,9 +138,9 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
 
           {step === "code" && (
             <>
-              <h1 className="mb-1 text-xl font-bold">Check your inbox</h1>
-              <p className="mb-5 text-sm text-zinc-400">
-                We sent a 6-digit code to <span className="font-semibold text-zinc-200">{email.trim()}</span>.
+              <h1 className="mb-1 text-xl font-black text-navy">Check your inbox</h1>
+              <p className="mb-5 text-sm text-muted">
+                We sent a 6-digit code to <span className="font-bold text-navy">{email.trim()}</span>.
               </p>
               <form
                 className="space-y-4"
@@ -159,7 +157,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                   placeholder="••••••"
-                  className="text-center text-2xl font-black tracking-[0.5em]"
+                  className="text-center text-2xl font-black tracking-[0.5em] text-navy"
                   autoFocus
                 />
                 <ErrorNote message={error} />
@@ -168,11 +166,11 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                 </Button>
               </form>
               <div className="mt-4 flex items-center justify-between text-sm">
-                <button className="text-zinc-400 hover:text-lime-300" onClick={() => { setStep("email"); setError(null); }}>
+                <button className="font-semibold text-muted hover:text-royal" onClick={() => { setStep("email"); setError(null); }}>
                   ← Different email
                 </button>
                 <button
-                  className="text-zinc-400 hover:text-lime-300 disabled:opacity-40"
+                  className="font-semibold text-royal hover:text-royal-dark disabled:opacity-40"
                   disabled={cooldown > 0 || busy}
                   onClick={() => void sendCode()}
                 >
@@ -184,8 +182,8 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
 
           {step === "name" && (
             <>
-              <h1 className="mb-1 text-xl font-bold">You're in 🎾</h1>
-              <p className="mb-5 text-sm text-zinc-400">
+              <h1 className="mb-1 text-xl font-black text-navy">You're in 🎾</h1>
+              <p className="mb-5 text-sm text-muted">
                 One last thing — your name is what teammates see on court.
               </p>
               <form
@@ -207,7 +205,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           )}
         </Card>
         {step === "email" && (
-          <p className="mt-4 text-center text-xs text-zinc-500">
+          <p className="mt-4 text-center text-xs text-faint">
             One code signs you in and creates your account if you're new.
           </p>
         )}

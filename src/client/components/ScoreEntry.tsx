@@ -25,18 +25,18 @@ export function ScoreEntry({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{teamA}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-bold text-navy">{teamA}</span>
         <Stepper value={a} onChange={setA} min={0} max={total} big />
       </div>
       <div className="flex items-center justify-between gap-3">
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-400">{teamB}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-bold text-muted">{teamB}</span>
         <span className="inline-flex items-center gap-3">
           <span className="size-12" />
-          <span className="tabular w-14 text-center text-4xl font-extrabold text-zinc-500">{b}</span>
+          <span className="tabular w-14 text-center text-4xl font-black text-faint">{b}</span>
           <span className="size-12" />
         </span>
       </div>
-      <p className="text-center text-xs text-zinc-500">
+      <p className="text-center text-xs text-muted">
         {total} points per match — the other side fills in automatically
       </p>
       <Button className="w-full" size="lg" busy={busy} onClick={() => onSubmit(a, b)}>

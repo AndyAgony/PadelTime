@@ -1,23 +1,42 @@
 @import "tailwindcss";
 
+/* Design tokens — light, court-side clean (Playtomic-inspired):
+   white cards on a cool canvas, navy type, royal-blue actions, lime accents. */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --color-canvas: #f5f6fa;
+  --color-navy: #0f1d35;
+  --color-ink: #1c2942;
+  --color-muted: #6b7690;
+  --color-faint: #9aa3b8;
+  --color-line: #e4e8f1;
+  --color-line-strong: #cfd6e6;
+
+  --color-royal: #2f5bff;
+  --color-royal-dark: #2247e3;
+  --color-royal-soft: #eaefff;
+  --color-royal-soft-2: #d9e2ff;
+
+  --color-lime: #d9fb45;
+  --color-lime-dark: #b7e21b;
+  --color-lime-soft: #f2ffc4;
+
+  --color-mint-soft: #e3f7ee;
+  --color-mint-dark: #1c8a5b;
+  --color-amber-soft: #fff1d6;
+  --color-amber-dark: #b26a00;
+  --color-rose-soft: #ffe4e8;
+  --color-rose-dark: #c02a4a;
 }
 
 html {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
-  @apply bg-zinc-950 text-zinc-100 antialiased;
+  @apply bg-canvas text-ink antialiased;
   min-height: 100dvh;
-}
-
-/* Subtle court-green glow behind the app */
-.app-bg {
-  background:
-    radial-gradient(60rem 40rem at 85% -10%, rgba(163, 230, 53, 0.07), transparent 60%),
-    radial-gradient(50rem 35rem at -10% 110%, rgba(16, 185, 129, 0.05), transparent 60%);
 }
 
 .tabular {
@@ -25,7 +44,35 @@ body {
 }
 
 ::selection {
-  background: rgba(163, 230, 53, 0.35);
+  background: rgba(47, 91, 255, 0.18);
+}
+
+/* Court banner behind the session hero card */
+.court-banner {
+  background-color: #2f5bff;
+  background-image:
+    linear-gradient(112deg, transparent 49.5%, rgba(255, 255, 255, 0.85) 49.5%, rgba(255, 255, 255, 0.85) 50.5%, transparent 50.5%),
+    linear-gradient(68deg, transparent 49.5%, rgba(255, 255, 255, 0.85) 49.5%, rgba(255, 255, 255, 0.85) 50.5%, transparent 50.5%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 70%),
+    linear-gradient(135deg, #3663ff, #244ef0);
+}
+.court-banner::after {
+  content: "";
+  position: absolute;
+  left: 33%;
+  top: 38%;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #d9fb45;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
 }
 
 /* Pen & paper sheet printing */

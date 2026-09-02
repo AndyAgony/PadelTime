@@ -21,9 +21,9 @@ export type SessionRow = typeof gameSessions.$inferSelect;
 export async function loadSession(
   db: DB,
   id: string,
-): Promise<{ session: SessionRow; groupName: string } | null> {
+): Promise<{ session: SessionRow; groupName: string; groupIsPersonal: boolean } | null> {
   const rows = await db
-    .select({ session: gameSessions, groupName: groups.name })
+    .select({ session: gameSessions, groupName: groups.name, groupIsPersonal: groups.isPersonal })
     .from(gameSessions)
     .innerJoin(groups, eq(gameSessions.groupId, groups.id))
     .where(eq(gameSessions.id, id))
@@ -170,6 +170,7 @@ export async function buildDetail(
   session: SessionRow,
   groupName: string,
   viewerUserId: string | null,
+  groupIsPersonal = false,
 ): Promise<SessionDetail> {
   const players = await loadPlayers(db, session.id);
   const roundRows = await loadRounds(db, session.id);
@@ -202,6 +203,7 @@ export async function buildDetail(
     id: session.id,
     groupId: session.groupId,
     groupName,
+    groupIsPersonal,
     name: session.name,
     venue: session.venue,
     startsAt: session.startsAt,

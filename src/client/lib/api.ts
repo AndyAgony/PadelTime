@@ -42,7 +42,7 @@ export const Api = {
     req(`/groups/${groupId}/members/${userId}`, { method: "DELETE" }),
 
   createSession: (
-    groupId: string,
+    groupId: string | null,
     body: {
       name: string;
       venue?: string | null;
@@ -52,8 +52,9 @@ export const Api = {
       maxPlayers: number;
       pointsPerMatch: number;
       format: string;
+      copyPlayersFrom?: string | null;
     },
-  ) => req<{ id: string }>(`/groups/${groupId}/sessions`, post(body)),
+  ) => req<{ id: string }>(groupId ? `/groups/${groupId}/sessions` : "/sessions", post(body)),
   session: (id: string) => req<SessionDetail>(`/sessions/${id}`),
   updateSession: (id: string, body: Record<string, unknown>) => req(`/sessions/${id}`, patch(body)),
   deleteSession: (id: string) => req(`/sessions/${id}`, { method: "DELETE" }),

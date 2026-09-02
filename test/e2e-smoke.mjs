@@ -71,19 +71,13 @@ await register(org, "Andrew", `andrew${run}@test.com`);
 log("organizer registered → /app");
 await shot(org, "01-home");
 
-await org.getByRole("button", { name: /Create your first group/ }).click();
-await org.getByPlaceholder("Sunday Padel Crew").fill("Sunday Padel");
-await org.getByRole("button", { name: "Create group", exact: true }).click();
-await org.waitForURL("**/app/groups/**");
-const groupId = org.url().split("/groups/")[1];
-log("group created");
-
+// Session-first: no group step — straight from home.
 await org.getByRole("button", { name: "+ New session" }).click();
-await org.getByPlaceholder("Sunday Padel").fill("Sunday Night Americano");
+await org.getByPlaceholder("Thursday Padel Jam").fill("Sunday Night Americano");
 await org.getByRole("button", { name: "Create session", exact: true }).click();
 await org.waitForURL("**/app/sessions/**");
 const sessionId = org.url().split("/sessions/")[1];
-log("session created (draft)");
+log("session created from home (draft)");
 
 await org.getByRole("button", { name: "Open signup" }).click();
 await org.getByText("Invite players").waitFor({ timeout: 10000 });
@@ -209,9 +203,20 @@ log("session print sheet renders with names, played + planned rounds");
 await shot(pr, "11-session-print");
 
 // --- Quick start: type names in draft, start without opening signup --------
-await org.goto(`${BASE}/app/groups/${groupId}`);
+// Also exercises "bring back the players from" (copies the 8 from the first session).
+await org.goto(`${BASE}/app`);
+await org.getByText("Past sessions").waitFor({ timeout: 10000 });
 await org.getByRole("button", { name: "+ New session" }).click();
-await org.getByPlaceholder("Sunday Padel").fill("Quick Start Night");
+await org.getByPlaceholder("Thursday Padel Jam").fill("Bring Back Night");
+await org.locator("select").selectOption({ index: 1 });
+await org.getByRole("button", { name: "Create session", exact: true }).click();
+await org.waitForURL("**/app/sessions/**");
+await org.getByText("George").first().waitFor({ timeout: 10000 });
+if ((await org.locator("ul > li").count()) < 8) fail("copied roster should have 8 players");
+log("bring back players: new session pre-loaded with previous roster");
+await org.goto(`${BASE}/app`);
+await org.getByRole("button", { name: "+ New session" }).click();
+await org.getByPlaceholder("Thursday Padel Jam").fill("Quick Start Night");
 await org.getByRole("button", { name: "Create session", exact: true }).click();
 await org.waitForURL("**/app/sessions/**");
 const startBtn = org.getByRole("button", { name: "Start session →" });

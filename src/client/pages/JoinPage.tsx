@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { authClient } from "../lib/auth";
 import { Api, useLoad } from "../lib/api";
-import { fmtDateTime } from "../lib/format";
-import { Badge, Button, Card, ErrorNote, PageSpinner } from "../components/ui";
+import { fmtTimeRange } from "../lib/format";
+import { Button, Card, ErrorNote, InfoRow, PageSpinner, ProgressBar, StatCell } from "../components/ui";
+import { Logo } from "../App";
 
 export function JoinPage() {
   const { code = "" } = useParams();
@@ -28,87 +29,105 @@ export function JoinPage() {
     }
   };
 
-  const spotsLeft = data ? Math.max(0, data.maxPlayers - data.confirmedCount) : 0;
+  if (error || !data) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
+        <Card className="text-center">
+          <p className="text-ink">{error ?? "Invite not found"}</p>
+        </Card>
+      </div>
+    );
+  }
+
+  const spotsLeft = Math.max(0, data.maxPlayers - data.confirmedCount);
+  const joined = !!data.myStatus && data.myStatus !== "dropped";
+  const over = ["complete", "cancelled"].includes(data.status);
 
   return (
-    <div className="app-bg flex min-h-dvh items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <Link to="/" className="mb-6 flex items-center justify-center gap-2 font-extrabold tracking-tight">
-          <span className="text-2xl">🎾</span>
-          <span className="text-xl">
-            Padel<span className="text-lime-400">Time</span>
-          </span>
-        </Link>
-
-        {error || !data ? (
-          <Card className="text-center">
-            <p className="text-zinc-300">{error ?? "Invite not found"}</p>
-          </Card>
-        ) : (
-          <Card>
-            <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">You're invited</p>
-            <h1 className="mt-1 text-2xl font-black">{data.name}</h1>
-            <p className="text-sm text-zinc-400">{data.groupName}</p>
-            <div className="mt-4 space-y-1.5 text-sm text-zinc-300">
-              <p>
-                📅 {fmtDateTime(data.startsAt)}
-                {data.durationMin ? ` · ${data.durationMin} min` : ""}
-              </p>
-              {data.venue && <p>📍 {data.venue}</p>}
-              <p>
-                🎾 Americano · {data.pointsPerMatch} points · {data.courts} court{data.courts === 1 ? "" : "s"}
-              </p>
-              <p className="pt-1">
-                <span className="font-bold text-lime-300">{data.confirmedCount}</span>
-                <span className="text-zinc-500">/{data.maxPlayers} in</span>
-                {data.waitlistCount > 0 && <span className="ml-2 text-amber-300">{data.waitlistCount} waitlisted</span>}
-              </p>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {data.myStatus && data.myStatus !== "dropped" ? (
-                <>
-                  <div className="rounded-xl bg-lime-400/10 px-4 py-3 text-center text-sm">
-                    {data.myStatus === "waitlist" ? (
-                      <span className="text-amber-300">You're on the waitlist — hang tight.</span>
-                    ) : (
-                      <span className="text-lime-300">You're in ✓</span>
-                    )}
-                  </div>
-                  <Button className="w-full" onClick={() => navigate(`/app/sessions/${data.sessionId}`)}>
-                    Open session
-                  </Button>
-                </>
-              ) : !session ? (
-                <>
-                  <Link to={`/login?next=${encodeURIComponent(`/join/${code}`)}`} className="block">
-                    <Button className="w-full" size="lg">
-                      Continue with email →
-                    </Button>
-                  </Link>
-                  <p className="text-center text-xs text-zinc-500">
-                    We'll email you a 6-digit code — no password needed.
-                  </p>
-                </>
-              ) : (
-                <Button className="w-full" size="lg" busy={busy} onClick={join}>
-                  {spotsLeft > 0 ? "Join session" : "Join waitlist"}
-                </Button>
-              )}
-              <ErrorNote message={joinErr} />
-              {!data.myStatus && spotsLeft > 0 && (
-                <p className="text-center text-xs text-zinc-500">
-                  {spotsLeft} spot{spotsLeft === 1 ? "" : "s"} left
-                </p>
-              )}
-              {["active", "complete"].includes(data.status) && (
-                <p className="text-center text-xs text-zinc-500">
-                  <Badge tone="zinc">{data.status === "active" ? "Session in progress" : "Session finished"}</Badge>
-                </p>
-              )}
+    <div className="min-h-dvh bg-canvas pb-28">
+      <div className="mx-auto max-w-lg">
+        <div className="court-banner relative h-40 sm:rounded-b-3xl">
+          <div className="absolute left-4 top-4">
+            <span className="rounded-full bg-white px-3 py-1.5 shadow-md">
+              <Logo to="/" />
+            </span>
+          </div>
+        </div>
+        <div className="px-3">
+          <Card className="relative -mt-14 shadow-lg">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted">You're invited</p>
+            <h1 className="mt-1 text-2xl font-black leading-tight text-navy">{data.name}</h1>
+            <p className="mt-1 text-sm text-muted">{fmtTimeRange(data.startsAt, data.durationMin)}</p>
+            {data.venue && <p className="text-sm text-muted">📍 {data.venue}</p>}
+            <div className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-4">
+              <StatCell label="Format" value="Americano" />
+              <StatCell label="Points" value={data.pointsPerMatch} />
+              <StatCell label="Courts" value={data.courts} />
             </div>
           </Card>
-        )}
+
+          <Card className="mt-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black text-navy">Players</h3>
+              <span className="tabular text-sm font-bold text-navy">
+                {data.confirmedCount} <span className="font-medium text-muted">/ {data.maxPlayers}</span>
+              </span>
+            </div>
+            <ProgressBar value={data.confirmedCount} max={data.maxPlayers} className="mt-3" />
+            <p className="mt-2 text-xs text-muted">
+              {spotsLeft > 0 ? `${spotsLeft} spot${spotsLeft === 1 ? "" : "s"} left` : "Full — new joins go on the waitlist"}
+              {data.waitlistCount > 0 && ` · ${data.waitlistCount} waitlisted`}
+            </p>
+          </Card>
+
+          <Card className="mt-4">
+            <h3 className="mb-1 text-lg font-black text-navy">How it works</h3>
+            <div className="divide-y divide-line">
+              <InfoRow icon="🔄">New partner every round — Americano</InfoRow>
+              <InfoRow icon="🎯">Matches to {data.pointsPerMatch} rally points, you score individually</InfoRow>
+              <InfoRow icon="📱">Enter and confirm scores from your phone; live leaderboard</InfoRow>
+              <InfoRow icon="🔑">No password — a one-time code by email</InfoRow>
+            </div>
+          </Card>
+
+          <div className="mt-4">
+            <ErrorNote message={joinErr} />
+          </div>
+        </div>
+      </div>
+
+      {/* Sticky action, Playtomic-style */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 p-4 backdrop-blur">
+        <div className="mx-auto max-w-lg">
+          {joined ? (
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1 text-sm font-semibold">
+                {data.myStatus === "waitlist" ? (
+                  <span className="text-amber-dark">You're on the waitlist — hang tight.</span>
+                ) : (
+                  <span className="text-navy">You're in ✓</span>
+                )}
+              </div>
+              <Button size="lg" onClick={() => navigate(`/app/sessions/${data.sessionId}`)}>
+                Open session
+              </Button>
+            </div>
+          ) : over ? (
+            <Button className="w-full" size="lg" disabled>
+              {data.status === "complete" ? "Session finished" : "Session cancelled"}
+            </Button>
+          ) : !session ? (
+            <Link to={`/login?next=${encodeURIComponent(`/join/${code}`)}`} className="block">
+              <Button className="w-full" size="lg">
+                Continue with email →
+              </Button>
+            </Link>
+          ) : (
+            <Button className="w-full" size="lg" busy={busy} onClick={join}>
+              {data.status === "active" ? "Ask the organizer to add you" : spotsLeft > 0 ? "Join session" : "Join waitlist"}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
