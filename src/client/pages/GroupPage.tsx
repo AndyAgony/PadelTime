@@ -42,6 +42,7 @@ export function GroupPage() {
     name: "",
     when: "",
     venue: "",
+    durationMin: 90,
     courts: 2,
     maxPlayers: 12,
     pointsPerMatch: 24,
@@ -64,6 +65,7 @@ export function GroupPage() {
         name: form.name || `${data.name} session`,
         venue: form.venue || null,
         startsAt: fromLocalInputValue(form.when),
+        durationMin: form.durationMin,
         courts: form.courts,
         maxPlayers: form.maxPlayers,
         pointsPerMatch: form.pointsPerMatch,
@@ -189,13 +191,26 @@ export function GroupPage() {
               onChange={(e) => setForm({ ...form, when: e.target.value })}
             />
           </Field>
-          <Field label="Venue">
-            <Input
-              value={form.venue}
-              onChange={(e) => setForm({ ...form, venue: e.target.value })}
-              placeholder="Padel club"
-            />
-          </Field>
+          <div className="grid grid-cols-[1fr_auto] gap-3">
+            <Field label="Venue">
+              <Input
+                value={form.venue}
+                onChange={(e) => setForm({ ...form, venue: e.target.value })}
+                placeholder="Padel club"
+              />
+            </Field>
+            <Field label="Court time (min)">
+              <Input
+                type="number"
+                min={15}
+                max={600}
+                step={15}
+                className="w-24"
+                value={form.durationMin}
+                onChange={(e) => setForm({ ...form, durationMin: num(e.target.value, 90) })}
+              />
+            </Field>
+          </div>
           <div className="grid grid-cols-3 gap-3">
             <Field label="Courts">
               <Input

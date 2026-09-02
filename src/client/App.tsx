@@ -23,11 +23,12 @@ function Logo() {
 }
 
 function AppLayout() {
-  const { data: session, isPending } = authClient.useSession();
+  const { data: session, isPending, isRefetching } = authClient.useSession();
   const location = useLocation();
   const navigate = useNavigate();
 
-  if (isPending) return <PageSpinner />;
+  // Never bounce to login while a session read is still in flight.
+  if (isPending || (isRefetching && !session)) return <PageSpinner />;
   if (!session) {
     return <Navigate to={`/login?next=${encodeURIComponent(location.pathname)}`} replace />;
   }

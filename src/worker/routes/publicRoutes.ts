@@ -46,6 +46,7 @@ publicRoutes.get("/join/:code", async (c) => {
     groupName,
     venue: session.venue,
     startsAt: session.startsAt,
+    durationMin: session.durationMin,
     status: session.status as SessionStatus,
     format: session.format as JoinInfo["format"],
     courts: session.courts,

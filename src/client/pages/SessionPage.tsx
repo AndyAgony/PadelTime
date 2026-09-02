@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Api, usePoll } from "../lib/api";
 import { fmtDateTime, fromLocalInputValue, toLocalInputValue } from "../lib/format";
 import { SESSION_STATUS_LABEL } from "../../shared/types";
 import type { MatchRow, PlayerRow, RoundRow, SessionDetail } from "../../shared/types";
+import { estimateRounds } from "../../shared/timing";
 import { Badge, Button, Card, CopyButton, ErrorNote, Field, Input, Modal, PageSpinner, cls } from "../components/ui";
 import { ScoreEntry } from "../components/ScoreEntry";
 import { StandingsTable } from "../components/StandingsTable";
@@ -41,7 +42,9 @@ export function SessionPage() {
   return (
     <div className="space-y-5">
       <Header d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} onDeleted={() => navigate(`/app/groups/${d.groupId}`)} />
+      <LifecycleStepper d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />
       <ErrorNote message={actionErr} />
+      {d.status !== "cancelled" && <RulesCard d={d} />}
 
       {d.status === "draft" && <DraftView d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />}
       {d.status === "open" && <OpenView d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />}
@@ -83,9 +86,14 @@ function Header({
       <div className="flex items-start justify-between gap-3">
         <h1 className="text-2xl font-black tracking-tight">{d.name}</h1>
         {isOrganizer && (
-          <Button variant="subtle" size="sm" onClick={() => setShowSettings(true)}>
-            Settings
-          </Button>
+          <div className="flex shrink-0 gap-1">
+            <a href={`/print?session=${d.id}`} target="_blank" rel="noreferrer" title="Printable pen & paper sheet for this session">
+              <Button variant="subtle" size="sm">🖨 Print</Button>
+            </a>
+            <Button variant="subtle" size="sm" onClick={() => setShowSettings(true)}>
+              Settings
+            </Button>
+          </div>
         )}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -96,6 +104,7 @@ function Header({
         </Badge>
         <span className="text-sm text-zinc-400">
           {fmtDateTime(d.startsAt)}
+          {d.durationMin ? ` · ${d.durationMin} min` : ""}
           {d.venue ? ` · ${d.venue}` : ""}
         </span>
       </div>
@@ -125,6 +134,7 @@ function SettingsModal({
     name: d.name,
     venue: d.venue ?? "",
     when: toLocalInputValue(d.startsAt),
+    durationMin: d.durationMin ?? 0,
     courts: d.courts,
     maxPlayers: d.maxPlayers,
     pointsPerMatch: d.pointsPerMatch,
@@ -143,9 +153,22 @@ function SettingsModal({
         <Field label="When">
           <Input type="datetime-local" value={form.when} onChange={(e) => setForm({ ...form, when: e.target.value })} />
         </Field>
-        <Field label="Venue">
-          <Input value={form.venue} onChange={(e) => setForm({ ...form, venue: e.target.value })} />
-        </Field>
+        <div className="grid grid-cols-[1fr_auto] gap-3">
+          <Field label="Venue">
+            <Input value={form.venue} onChange={(e) => setForm({ ...form, venue: e.target.value })} />
+          </Field>
+          <Field label="Court time (min)">
+            <Input
+              type="number"
+              min={0}
+              max={600}
+              step={15}
+              className="w-24"
+              value={form.durationMin}
+              onChange={(e) => setForm({ ...form, durationMin: num(e.target.value, d.durationMin ?? 0) })}
+            />
+          </Field>
+        </div>
         <div className="grid grid-cols-3 gap-3">
           <Field label="Courts">
             <Input type="number" min={1} max={12} value={form.courts} onChange={(e) => setForm({ ...form, courts: num(e.target.value, d.courts) })} />
@@ -167,6 +190,7 @@ function SettingsModal({
                 name: form.name,
                 venue: form.venue || null,
                 startsAt: fromLocalInputValue(form.when),
+                durationMin: form.durationMin || null,
                 courts: form.courts,
                 maxPlayers: form.maxPlayers,
                 pointsPerMatch: form.pointsPerMatch,
@@ -215,6 +239,120 @@ function SettingsModal({
 }
 
 // ---------------------------------------------------------------------------
+
+// The session journey, always visible: Players → Check-in → Play → Results.
+// Organizers can click ahead to advance (same validations as the buttons).
+const STEPS = [
+  { label: "Players", statuses: ["draft", "open"] },
+  { label: "Check-in", statuses: ["checkin"] },
+  { label: "Play", statuses: ["active"] },
+  { label: "Results", statuses: ["complete"] },
+] as const;
+
+function LifecycleStepper({ d, isOrganizer, run, busyKey }: ViewProps) {
+  if (d.status === "cancelled") return null;
+  const current = STEPS.findIndex((s) => (s.statuses as readonly string[]).includes(d.status));
+
+  const advance = (target: number) => {
+    if (!isOrganizer || target <= current || busyKey) return;
+    if (d.status === "active" && target === 3) {
+      if (window.confirm("Finish the session and lock the final standings?")) {
+        run("finish", () => Api.sessionAction(d.id, "complete"));
+      }
+      return;
+    }
+    if (target === 1) run("checkin", () => Api.sessionAction(d.id, "start_checkin"));
+    if (target === 2) run("start", () => Api.sessionAction(d.id, "start"));
+  };
+
+  return (
+    <div className="flex items-center gap-1 overflow-x-auto py-1">
+      {STEPS.map((s, i) => {
+        const done = i < current;
+        const cur = i === current;
+        const reach = current === 0 ? 2 : 1; // from Players you can jump straight to Play
+        const clickable = isOrganizer && i > current && i - current <= reach && d.status !== "complete";
+        return (
+          <Fragment key={s.label}>
+            {i > 0 && <span className={cls("h-px w-3 shrink-0 sm:w-8", done || cur ? "bg-lime-400/60" : "bg-zinc-800")} />}
+            <button
+              type="button"
+              disabled={!clickable}
+              onClick={() => advance(i)}
+              title={clickable ? `Go to ${s.label}` : undefined}
+              className={cls(
+                "flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors",
+                cur
+                  ? "bg-lime-400/15 text-lime-300 ring-1 ring-lime-400/40"
+                  : done
+                    ? "text-lime-400/80"
+                    : clickable
+                      ? "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                      : "text-zinc-600",
+              )}
+            >
+              <span
+                className={cls(
+                  "flex size-4 items-center justify-center rounded-full text-[10px] font-black",
+                  cur ? "bg-lime-400 text-zinc-950" : done ? "bg-lime-400/80 text-zinc-950" : "bg-zinc-800 text-zinc-500",
+                )}
+              >
+                {done ? "✓" : i + 1}
+              </span>
+              {s.label}
+            </button>
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+function RulesCard({ d }: { d: SessionDetail }) {
+  const [open, setOpen] = useState(["draft", "open", "checkin"].includes(d.status));
+  return (
+    <Card className="py-3">
+      <button type="button" className="flex w-full items-center justify-between text-left" onClick={() => setOpen((o) => !o)}>
+        <span className="font-bold">
+          📖 Americano tournament — <span className="font-semibold text-zinc-300">the rules</span>
+        </span>
+        <span className="text-zinc-500">{open ? "▴" : "▾"}</span>
+      </button>
+      {open && (
+        <ul className="mt-3 space-y-1.5 text-sm text-zinc-300">
+          <li>
+            🔄 <b>New partner every round.</b> Pairings rotate for maximum variety of partners and opponents — it's you
+            against the field, not fixed teams.
+          </li>
+          <li>
+            🎯 Each match is one game to <b>{d.pointsPerMatch} total rally points</b> (e.g. 14–10). Every point counts,
+            serve rotates, no deuce.
+          </li>
+          <li>
+            🧮 <b>You score as an individual</b> — both players on a team bank the team's points.
+          </li>
+          <li>
+            🏟️ {d.courts} court{d.courts === 1 ? "" : "s"} per round. Extra players sit out, and sit-outs rotate so
+            everyone rests about equally.
+          </li>
+          <li>
+            ✅ Players enter the score, the other team confirms it. The organizer can always correct a score.
+          </li>
+          <li>
+            🏆 <b>Most total points at the end wins.</b> Ties are allowed.
+          </li>
+          {d.durationMin && estimateRounds(d.durationMin, d.pointsPerMatch) && (
+            <li>
+              ⏱ {d.durationMin} min of court time fits roughly{" "}
+              <b>{estimateRounds(d.durationMin, d.pointsPerMatch)} rounds</b> — but rounds keep coming as long as you
+              want to play.
+            </li>
+          )}
+        </ul>
+      )}
+    </Card>
+  );
+}
 
 function ShareCard({ d }: { d: SessionDetail }) {
   const joinUrl = `${window.location.origin}/join/${d.inviteCode}`;
@@ -393,16 +531,53 @@ function MyStatusCard({ d, run, busyKey }: { d: SessionDetail; run: Run; busyKey
 
 // ---------------------------------------------------------------------------
 
+function StartPreview({ d }: { d: SessionDetail }) {
+  const ready = d.counts.confirmed + d.counts.checkedIn;
+  const courtsUsed = Math.min(d.courts, Math.floor(ready / 4));
+  const byes = courtsUsed > 0 ? ready - courtsUsed * 4 : ready;
+  const estimate = estimateRounds(d.durationMin, d.pointsPerMatch);
+  if (ready === 0) return null;
+  return (
+    <div className="mt-3 rounded-xl bg-zinc-950/70 px-4 py-3 text-sm">
+      <span className="font-bold text-lime-300">{ready}</span> player{ready === 1 ? "" : "s"} →{" "}
+      <span className="font-bold">{courtsUsed}</span> court{courtsUsed === 1 ? "" : "s"} per round
+      {courtsUsed > 0 && byes > 0 && (
+        <>
+          {" "}
+          · <span className="font-bold">{byes}</span> sitting each round
+        </>
+      )}
+      {courtsUsed === 0 && <span className="text-amber-300"> — need at least 4 to start</span>}
+      {estimate && courtsUsed > 0 && (
+        <p className="mt-1 text-xs text-zinc-400">
+          {d.durationMin} min of court time ≈ <span className="font-bold text-zinc-200">{estimate} rounds</span> of{" "}
+          {d.pointsPerMatch} points — keep dealing rounds if you have time left.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function DraftView({ d, isOrganizer, run, busyKey }: ViewProps) {
+  const ready = d.counts.confirmed + d.counts.checkedIn;
   return (
     <div className="space-y-4">
       {isOrganizer ? (
         <Card className="border-lime-400/30">
-          <h3 className="font-bold">Ready to invite people?</h3>
-          <p className="mb-4 mt-1 text-sm text-zinc-400">Open signup to activate the invite link, or add players yourself below.</p>
-          <Button busy={busyKey === "open"} onClick={() => run("open", () => Api.sessionAction(d.id, "open"))}>
-            Open signup
-          </Button>
+          <h3 className="font-bold">Get the session going</h3>
+          <p className="mt-1 text-sm text-zinc-400">
+            Add players by name below and start whenever you have enough — or open signup and share
+            the invite link so people join themselves.
+          </p>
+          <StartPreview d={d} />
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button busy={busyKey === "start"} disabled={ready < 4} onClick={() => run("start", () => Api.sessionAction(d.id, "start"))}>
+              Start session →
+            </Button>
+            <Button variant="ghost" busy={busyKey === "open"} onClick={() => run("open", () => Api.sessionAction(d.id, "open"))}>
+              Open signup
+            </Button>
+          </div>
         </Card>
       ) : (
         <Card>
@@ -421,12 +596,21 @@ function OpenView({ d, isOrganizer, run, busyKey }: ViewProps) {
       <ShareCard d={d} />
       {isOrganizer && (
         <Card className="border-lime-400/30">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="font-bold">Game day?</h3>
-              <p className="text-sm text-zinc-400">Start check-in when people arrive at the club.</p>
-            </div>
-            <Button busy={busyKey === "checkin"} onClick={() => run("checkin", () => Api.sessionAction(d.id, "start_checkin"))}>
+          <h3 className="font-bold">Game day?</h3>
+          <p className="mt-1 text-sm text-zinc-400">
+            Start now to play with everyone who's signed up, or run check-in first so only the people
+            actually at the club get scheduled.
+          </p>
+          <StartPreview d={d} />
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              busy={busyKey === "start"}
+              disabled={d.counts.confirmed + d.counts.checkedIn < 4}
+              onClick={() => run("start", () => Api.sessionAction(d.id, "start"))}
+            >
+              Start session →
+            </Button>
+            <Button variant="ghost" busy={busyKey === "checkin"} onClick={() => run("checkin", () => Api.sessionAction(d.id, "start_checkin"))}>
               Start check-in
             </Button>
           </div>
@@ -529,7 +713,18 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
       {current && (
         <Card>
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-lg font-black">Round {current.number}</h3>
+            <h3 className="text-lg font-black">
+              Round {current.number}
+              {(() => {
+                const est = estimateRounds(d.durationMin, d.pointsPerMatch);
+                if (!est) return null;
+                return (
+                  <span className="ml-1.5 text-sm font-medium text-zinc-500">
+                    {current.number <= est ? `of ~${est}` : "· extra time"}
+                  </span>
+                );
+              })()}
+            </h3>
             {current.complete ? <Badge tone="lime">all scores in</Badge> : <Badge tone="zinc">{current.matches.filter((m) => m.status === "confirmed").length}/{current.matches.length} scored</Badge>}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">

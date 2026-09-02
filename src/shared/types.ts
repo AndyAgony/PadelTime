@@ -26,6 +26,7 @@ export interface SessionSummary {
   name: string;
   status: SessionStatus;
   startsAt: number | null;
+  durationMin: number | null;
   venue: string | null;
   format: FormatKey;
   courts: number;
@@ -108,6 +109,7 @@ export interface SessionDetail {
   name: string;
   venue: string | null;
   startsAt: number | null;
+  durationMin: number | null;
   status: SessionStatus;
   format: FormatKey;
   courts: number;
@@ -130,6 +132,7 @@ export interface JoinInfo {
   groupName: string;
   venue: string | null;
   startsAt: number | null;
+  durationMin: number | null;
   status: SessionStatus;
   format: FormatKey;
   courts: number;

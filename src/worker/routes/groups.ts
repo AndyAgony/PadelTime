@@ -70,6 +70,7 @@ function toSummary(
     name: s.name,
     status: s.status as SessionStatus,
     startsAt: s.startsAt,
+    durationMin: s.durationMin,
     venue: s.venue,
     format: s.format as SessionSummary["format"],
     courts: s.courts,
@@ -220,6 +221,8 @@ groupRoutes.post("/groups/:id/sessions", async (c) => {
   const maxPlayers = Math.min(Math.max(asInt(body.maxPlayers) ?? 12, format.minPlayers), 64);
   const pointsPerMatch = Math.min(Math.max(asInt(body.pointsPerMatch) ?? format.defaultPoints, 4), 99);
   const startsAt = asInt(body.startsAt);
+  const durationRaw = asInt(body.durationMin);
+  const durationMin = durationRaw == null ? 90 : durationRaw <= 0 ? null : Math.min(durationRaw, 600);
   const venue = trimmed(body.venue, 80);
 
   const ts = now();
@@ -232,6 +235,7 @@ groupRoutes.post("/groups/:id/sessions", async (c) => {
         name,
         venue,
         startsAt,
+        durationMin,
         courts,
         maxPlayers,
         pointsPerMatch,

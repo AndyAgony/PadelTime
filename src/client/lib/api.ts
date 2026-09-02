@@ -47,6 +47,7 @@ export const Api = {
       name: string;
       venue?: string | null;
       startsAt?: number | null;
+      durationMin?: number | null;
       courts: number;
       maxPlayers: number;
       pointsPerMatch: number;

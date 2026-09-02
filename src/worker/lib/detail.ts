@@ -205,6 +205,7 @@ export async function buildDetail(
     name: session.name,
     venue: session.venue,
     startsAt: session.startsAt,
+    durationMin: session.durationMin,
     status: session.status as SessionStatus,
     format: session.format as FormatKey,
     courts: session.courts,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { authClient } from "../lib/auth";
 import { Button, Card, ErrorNote, Field, Input } from "../components/ui";
 
@@ -21,9 +21,15 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [busy, setBusy] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const verifying = useRef(false);
-  const navigate = useNavigate();
   const [params] = useSearchParams();
-  const next = params.get("next") || "/app";
+  const rawNext = params.get("next") || "/app";
+  // Only ever land on our own paths.
+  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/app";
+
+  // A full page load after sign-in guarantees the app boots with a fresh
+  // session read — an in-app navigate can race the cached "no session"
+  // state and bounce straight back to login.
+  const enter = () => window.location.replace(next);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -64,7 +70,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
     if (needsName(res.data?.user?.name, email)) {
       setStep("name");
     } else {
-      navigate(next, { replace: true });
+      enter();
     }
   };
 
@@ -78,7 +84,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
     if (res.error) {
       setError(res.error.message ?? "Couldn't save your name — try again");
     } else {
-      navigate(next, { replace: true });
+      enter();
     }
   };
 

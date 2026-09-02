@@ -50,7 +50,10 @@ export function JoinPage() {
             <h1 className="mt-1 text-2xl font-black">{data.name}</h1>
             <p className="text-sm text-zinc-400">{data.groupName}</p>
             <div className="mt-4 space-y-1.5 text-sm text-zinc-300">
-              <p>📅 {fmtDateTime(data.startsAt)}</p>
+              <p>
+                📅 {fmtDateTime(data.startsAt)}
+                {data.durationMin ? ` · ${data.durationMin} min` : ""}
+              </p>
               {data.venue && <p>📍 {data.venue}</p>}
               <p>
                 🎾 Americano · {data.pointsPerMatch} points · {data.courts} court{data.courts === 1 ? "" : "s"}

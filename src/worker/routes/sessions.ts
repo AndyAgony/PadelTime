@@ -65,6 +65,10 @@ sessionRoutes.patch("/sessions/:id", async (c) => {
   if (name) patch.name = name;
   if ("venue" in body) patch.venue = trimmed(body.venue, 80);
   if ("startsAt" in body) patch.startsAt = asInt(body.startsAt);
+  if ("durationMin" in body) {
+    const dur = asInt(body.durationMin);
+    patch.durationMin = dur == null || dur <= 0 ? null : Math.min(dur, 600);
+  }
   const courts = asInt(body.courts);
   if (courts != null) patch.courts = Math.min(Math.max(courts, 1), 12);
 
@@ -137,8 +141,19 @@ sessionRoutes.post("/sessions/:id/status", async (c) => {
       return c.json({ ok: true });
     }
     case "start": {
+      if (!["draft", "open", "checkin"].includes(session.status)) {
+        return c.json({ error: "Session has already started" }, 400);
+      }
+      // Fast path: starting straight from the roster (no check-in phase) means
+      // everyone the organizer confirmed is playing. From check-in, only the
+      // players who actually checked in get scheduled.
       if (session.status !== "checkin") {
-        return c.json({ error: "Close signup and run check-in before starting" }, 400);
+        await db
+          .update(sessionPlayers)
+          .set({ status: "checked_in", checkedInAt: now() })
+          .where(
+            and(eq(sessionPlayers.sessionId, session.id), eq(sessionPlayers.status, "confirmed")),
+          );
       }
       const result = await generateNextRound(db, session);
       if (result.error) return c.json({ error: result.error }, 400);

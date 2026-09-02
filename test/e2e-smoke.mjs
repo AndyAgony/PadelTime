@@ -75,12 +75,14 @@ await org.getByRole("button", { name: /Create your first group/ }).click();
 await org.getByPlaceholder("Sunday Padel Crew").fill("Sunday Padel");
 await org.getByRole("button", { name: "Create group", exact: true }).click();
 await org.waitForURL("**/app/groups/**");
+const groupId = org.url().split("/groups/")[1];
 log("group created");
 
 await org.getByRole("button", { name: "+ New session" }).click();
 await org.getByPlaceholder("Sunday Padel").fill("Sunday Night Americano");
 await org.getByRole("button", { name: "Create session", exact: true }).click();
 await org.waitForURL("**/app/sessions/**");
+const sessionId = org.url().split("/sessions/")[1];
 log("session created (draft)");
 
 await org.getByRole("button", { name: "Open signup" }).click();
@@ -194,6 +196,37 @@ await tv.getByText("Leaderboard").waitFor({ timeout: 10000 });
 await tv.getByText("Sunday Night Americano").waitFor();
 log("public board renders without auth");
 await shot(tv, "10-board");
+
+// --- Session-aware print sheet (names pre-filled, played rounds + planned) --
+const pr = await orgCtx.newPage();
+await pr.goto(`${BASE}/print?session=${sessionId}&rounds=4`);
+await pr.locator(".sheet").waitFor({ timeout: 15000 });
+const sheetText = await pr.locator(".sheet").innerText();
+for (const expected of ["Andrew", "Paula", "George", "ROUND 1", "ROUND 4", "Sunday Night Americano"]) {
+  if (!sheetText.includes(expected)) fail(`session print sheet missing "${expected}"`);
+}
+log("session print sheet renders with names, played + planned rounds");
+await shot(pr, "11-session-print");
+
+// --- Quick start: type names in draft, start without opening signup --------
+await org.goto(`${BASE}/app/groups/${groupId}`);
+await org.getByRole("button", { name: "+ New session" }).click();
+await org.getByPlaceholder("Sunday Padel").fill("Quick Start Night");
+await org.getByRole("button", { name: "Create session", exact: true }).click();
+await org.waitForURL("**/app/sessions/**");
+const startBtn = org.getByRole("button", { name: "Start session →" });
+if (!(await startBtn.isDisabled())) fail("start should be disabled with no players");
+for (const g of ["Ana", "Bea", "Cal", "Dee"]) {
+  await org.getByPlaceholder(/Add player by name/).fill(g);
+  await org.getByRole("button", { name: "Add", exact: true }).click();
+  await org.getByText(g).first().waitFor({ timeout: 10000 });
+}
+await org.getByText(/4 players → 1 court per round/).waitFor({ timeout: 10000 });
+await startBtn.click();
+await org.getByText("Round 1").first().waitFor({ timeout: 15000 });
+if ((await org.locator("button", { hasText: "Tap to enter score" }).count()) !== 1) fail("quick start should yield 1 court");
+log("quick start from draft: 4 names → Start → round 1 (no signup step)");
+await shot(org, "12-quick-start");
 
 await browser.close();
 console.log("\nE2E SMOKE: ALL PASSED ✅");
