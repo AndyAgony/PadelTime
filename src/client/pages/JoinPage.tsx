@@ -78,16 +78,14 @@ export function JoinPage() {
                 </>
               ) : !session ? (
                 <>
-                  <Link to={`/register?next=${encodeURIComponent(`/join/${code}`)}`} className="block">
-                    <Button className="w-full" size="lg">
-                      Join — create account
-                    </Button>
-                  </Link>
                   <Link to={`/login?next=${encodeURIComponent(`/join/${code}`)}`} className="block">
-                    <Button className="w-full" variant="outline">
-                      I have an account
+                    <Button className="w-full" size="lg">
+                      Continue with email →
                     </Button>
                   </Link>
+                  <p className="text-center text-xs text-zinc-500">
+                    We'll email you a 6-digit code — no password needed.
+                  </p>
                 </>
               ) : (
                 <Button className="w-full" size="lg" busy={busy} onClick={join}>

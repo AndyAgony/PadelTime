@@ -6,6 +6,10 @@
   "compatibility_flags": ["nodejs_compat"],
   "routes": [{ "pattern": "padeltime.andrewabony.com", "custom_domain": true }],
   "workers_dev": true,
+  "vars": {
+    // Swap for "PadelTime <login@andrewabony.com>" once the domain is verified in Resend.
+    "MAIL_FROM": "PadelTime <onboarding@resend.dev>"
+  },
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",

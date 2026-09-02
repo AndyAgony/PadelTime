@@ -33,12 +33,30 @@ async function launch() {
 
 const contextOpts = { ignoreHTTPSErrors: !!(process.env.HTTPS_PROXY || process.env.https_proxy) };
 
-async function register(page, name, email) {
-  await page.goto(`${BASE}/register`);
-  await page.getByPlaceholder("Andrew").fill(name);
+// Passwordless sign-in: request a code, read it from the DEV_MODE-only
+// endpoint (stands in for the inbox), verify, set a name if asked.
+async function otpSignIn(page, name, email) {
   await page.getByPlaceholder("you@example.com").fill(email);
-  await page.getByPlaceholder("••••••••").fill("padeltime123");
-  await page.getByRole("button", { name: "Create account" }).click();
+  await page.getByRole("button", { name: "Email me a code" }).click();
+  await page.getByPlaceholder("••••••").waitFor({ timeout: 10000 });
+  const res = await page.request.get(`${BASE}/api/dev/otp?email=${encodeURIComponent(email)}`);
+  const body = await res.json();
+  const otp = String(body.value ?? "").match(/\d{6}/)?.[0];
+  if (!otp) fail(`no OTP found for ${email}: ${JSON.stringify(body)}`);
+  await page.getByPlaceholder("••••••").fill(otp); // auto-verifies at 6 digits
+  const nameInput = page.getByPlaceholder("Andrew");
+  try {
+    await nameInput.waitFor({ timeout: 8000 });
+    await nameInput.fill(name);
+    await page.getByRole("button", { name: "Let's play" }).click();
+  } catch {
+    // existing account with a proper name — no name step
+  }
+}
+
+async function register(page, name, email) {
+  await page.goto(`${BASE}/login`);
+  await otpSignIn(page, name, email);
   await page.waitForURL("**/app", { timeout: 15000 });
 }
 
@@ -90,12 +108,10 @@ const paula = await paulaCtx.newPage();
 await paula.goto(`${BASE}/join/${code}`);
 await paula.getByText("You're invited").waitFor();
 await shot(paula, "03-join-page");
-await paula.getByRole("button", { name: "Join — create account" }).click();
-await paula.waitForURL("**/register**");
-await paula.getByPlaceholder("Andrew").fill("Paula");
-await paula.getByPlaceholder("you@example.com").fill(`paula${run}@test.com`);
-await paula.getByPlaceholder("••••••••").fill("padeltime123");
-await paula.getByRole("button", { name: "Create account" }).click();
+await paula.getByRole("button", { name: "Continue with email →" }).click();
+await paula.waitForURL("**/login**");
+await otpSignIn(paula, "Paula", `paula${run}@test.com`);
+await paula.waitForURL("**/join/**", { timeout: 15000 });
 await paula.getByRole("button", { name: /Join session|Join waitlist/ }).click({ timeout: 15000 });
 await paula.getByText("You're in ✓").waitFor({ timeout: 10000 });
 await paula.getByRole("button", { name: "Open session" }).click();

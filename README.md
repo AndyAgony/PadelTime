@@ -11,7 +11,7 @@ Everything runs in a **single Cloudflare Worker**:
 | Runtime | Cloudflare Workers (TypeScript) |
 | API | [Hono](https://hono.dev) under `/api/*` |
 | Database | Cloudflare **D1** (SQLite at the edge) via Drizzle ORM |
-| Auth | [Better Auth](https://better-auth.com) (email + password, sessions in D1) |
+| Auth | [Better Auth](https://better-auth.com) — passwordless email OTP (6-digit sign-in codes via [Resend](https://resend.com); sessions in D1) |
 | Frontend | React 19 + Vite + Tailwind v4, served as [Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/) with SPA fallback |
 | "Real-time" | 4-second visibility-aware polling (upgrade path: Durable Objects + WebSockets) |
 
@@ -56,8 +56,11 @@ The Worker is `padeltime`; the D1 database `padeltime-db` already exists (id in 
 ```bash
 npm run db:migrate:remote                          # apply schema to production D1
 npx wrangler secret put BETTER_AUTH_SECRET         # openssl rand -base64 32
+npx wrangler secret put RESEND_API_KEY             # sends the sign-in codes
 npm run deploy                                     # vite build && wrangler deploy
 ```
+
+Sign-in codes are sent from `MAIL_FROM` (wrangler.jsonc). Until your own domain is verified in Resend, the `onboarding@resend.dev` sender only delivers to the Resend account owner's email — verify the domain in Resend (DNS records on Cloudflare), then set `MAIL_FROM` to e.g. `PadelTime <login@andrewabony.com>`.
 
 Deploys to `padeltime.<account>.workers.dev`. To attach a real domain later: Workers → padeltime → Settings → **Domains & Routes** → add custom domain (auth callbacks follow the request origin automatically, so no config change is needed).
 

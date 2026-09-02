@@ -1,13 +1,31 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, like } from "drizzle-orm";
 import { Hono } from "hono";
 import type { BoardData, JoinInfo, PlayerStatus, SessionStatus } from "../../shared/types";
 import { computeStandings } from "../../shared/standings";
-import { groupMembers, sessionPlayers } from "../db/schema";
+import { groupMembers, sessionPlayers, verification } from "../db/schema";
 import { loadPlayers, loadRounds, loadSessionByCode } from "../lib/detail";
 import { newId, now } from "../lib/util";
 import type { ApiCtx } from "./context";
 
 export const publicRoutes = new Hono<ApiCtx>();
+
+// Local-development only: lets tests read the latest sign-in code instead of
+// an inbox. Gated on DEV_MODE=1, which only .dev.vars ever sets — the check
+// happens per request, and production has no DEV_MODE var.
+publicRoutes.get("/dev/otp", async (c) => {
+  if (c.env.DEV_MODE !== "1") return c.json({ error: "Not found" }, 404);
+  const email = (c.req.query("email") ?? "").toLowerCase();
+  if (!email) return c.json({ error: "email required" }, 400);
+  const db = c.get("db");
+  const [row] = await db
+    .select()
+    .from(verification)
+    .where(like(verification.identifier, `%otp%${email}%`))
+    .orderBy(desc(verification.createdAt))
+    .limit(1);
+  if (!row) return c.json({ error: "No code found" }, 404);
+  return c.json({ identifier: row.identifier, value: row.value });
+});
 
 // Public info for an invite link — enough to decide to join.
 publicRoutes.get("/join/:code", async (c) => {

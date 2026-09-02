@@ -1,33 +1,92 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { authClient } from "../lib/auth";
 import { Button, Card, ErrorNote, Field, Input } from "../components/ui";
 
+// Passwordless sign-in: email → 6-digit emailed code → (first time) your name.
+// /login and /register are the same flow; accounts are created on first code.
+
+function needsName(name: string | undefined | null, email: string): boolean {
+  if (!name) return true;
+  const n = name.trim().toLowerCase();
+  return n.length === 0 || n.includes("@") || n === email.split("@")[0].toLowerCase();
+}
+
 export function AuthPage({ mode }: { mode: "login" | "register" }) {
-  const [name, setName] = useState("");
+  const [step, setStep] = useState<"email" | "code" | "name">("email");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const verifying = useRef(false);
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const next = params.get("next") || "/app";
-  const isRegister = mode === "register";
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const sendCode = async () => {
     setBusy(true);
     setError(null);
-    const res = isRegister
-      ? await authClient.signUp.email({ email, password, name: name.trim() })
-      : await authClient.signIn.email({ email, password });
+    const res = await authClient.emailOtp.sendVerificationOtp({
+      email: email.trim().toLowerCase(),
+      type: "sign-in",
+    });
     setBusy(false);
     if (res.error) {
-      setError(res.error.message ?? "Something went wrong — try again");
+      setError(res.error.message ?? "Couldn't send the code — try again");
+    } else {
+      setStep("code");
+      setCode("");
+      setCooldown(30);
+    }
+  };
+
+  const verify = async (otp: string) => {
+    if (verifying.current) return;
+    verifying.current = true;
+    setBusy(true);
+    setError(null);
+    const res = await authClient.signIn.emailOtp({ email: email.trim().toLowerCase(), otp });
+    setBusy(false);
+    verifying.current = false;
+    if (res.error) {
+      setError(res.error.message ?? "That code didn't work — try again");
+      setCode("");
+      return;
+    }
+    if (needsName(res.data?.user?.name, email)) {
+      setStep("name");
     } else {
       navigate(next, { replace: true });
     }
   };
+
+  const saveName = async () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setBusy(true);
+    setError(null);
+    const res = await authClient.updateUser({ name: trimmed.slice(0, 40) });
+    setBusy(false);
+    if (res.error) {
+      setError(res.error.message ?? "Couldn't save your name — try again");
+    } else {
+      navigate(next, { replace: true });
+    }
+  };
+
+  // Auto-verify the moment 6 digits are in.
+  useEffect(() => {
+    if (step === "code" && /^\d{6}$/.test(code)) void verify(code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, step]);
 
   return (
     <div className="app-bg flex min-h-dvh items-center justify-center px-4">
@@ -39,51 +98,113 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           </span>
         </Link>
         <Card>
-          <h1 className="mb-1 text-xl font-bold">{isRegister ? "Create your account" : "Welcome back"}</h1>
-          <p className="mb-5 text-sm text-zinc-400">
-            {isRegister ? "Your name is what teammates see on court." : "Sign in to your padel crew."}
-          </p>
-          <form className="space-y-4" onSubmit={submit}>
-            {isRegister && (
-              <Field label="Name">
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Andrew" required autoFocus />
-              </Field>
-            )}
-            <Field label="Email">
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-                autoFocus={!isRegister}
-              />
-            </Field>
-            <Field label="Password" hint={isRegister ? "At least 8 characters" : undefined}>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                minLength={8}
-                required
-              />
-            </Field>
-            <ErrorNote message={error} />
-            <Button className="w-full" size="lg" busy={busy} type="submit">
-              {isRegister ? "Create account" : "Sign in"}
-            </Button>
-          </form>
+          {step === "email" && (
+            <>
+              <h1 className="mb-1 text-xl font-bold">
+                {mode === "register" ? "Create your account" : "Sign in"}
+              </h1>
+              <p className="mb-5 text-sm text-zinc-400">
+                No passwords here — we'll email you a 6-digit code. New emails get an account
+                automatically.
+              </p>
+              <form
+                className="space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void sendCode();
+                }}
+              >
+                <Field label="Email">
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    autoFocus
+                  />
+                </Field>
+                <ErrorNote message={error} />
+                <Button className="w-full" size="lg" busy={busy} type="submit">
+                  Email me a code
+                </Button>
+              </form>
+            </>
+          )}
+
+          {step === "code" && (
+            <>
+              <h1 className="mb-1 text-xl font-bold">Check your inbox</h1>
+              <p className="mb-5 text-sm text-zinc-400">
+                We sent a 6-digit code to <span className="font-semibold text-zinc-200">{email.trim()}</span>.
+              </p>
+              <form
+                className="space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (/^\d{6}$/.test(code)) void verify(code);
+                }}
+              >
+                <Input
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="••••••"
+                  className="text-center text-2xl font-black tracking-[0.5em]"
+                  autoFocus
+                />
+                <ErrorNote message={error} />
+                <Button className="w-full" size="lg" busy={busy} type="submit" disabled={code.length !== 6}>
+                  Sign in
+                </Button>
+              </form>
+              <div className="mt-4 flex items-center justify-between text-sm">
+                <button className="text-zinc-400 hover:text-lime-300" onClick={() => { setStep("email"); setError(null); }}>
+                  ← Different email
+                </button>
+                <button
+                  className="text-zinc-400 hover:text-lime-300 disabled:opacity-40"
+                  disabled={cooldown > 0 || busy}
+                  onClick={() => void sendCode()}
+                >
+                  {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === "name" && (
+            <>
+              <h1 className="mb-1 text-xl font-bold">You're in 🎾</h1>
+              <p className="mb-5 text-sm text-zinc-400">
+                One last thing — your name is what teammates see on court.
+              </p>
+              <form
+                className="space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void saveName();
+                }}
+              >
+                <Field label="Your name">
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Andrew" required autoFocus />
+                </Field>
+                <ErrorNote message={error} />
+                <Button className="w-full" size="lg" busy={busy} type="submit">
+                  Let's play
+                </Button>
+              </form>
+            </>
+          )}
         </Card>
-        <p className="mt-4 text-center text-sm text-zinc-400">
-          {isRegister ? "Already have an account? " : "New here? "}
-          <Link
-            className="font-semibold text-lime-400 hover:text-lime-300"
-            to={`${isRegister ? "/login" : "/register"}?next=${encodeURIComponent(next)}`}
-          >
-            {isRegister ? "Sign in" : "Create an account"}
-          </Link>
-        </p>
+        {step === "email" && (
+          <p className="mt-4 text-center text-xs text-zinc-500">
+            One code signs you in and creates your account if you're new.
+          </p>
+        )}
       </div>
     </div>
   );
