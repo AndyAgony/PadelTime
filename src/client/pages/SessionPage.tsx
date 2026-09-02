@@ -24,7 +24,7 @@ import {
   cls,
 } from "../components/ui";
 import { ScoreEntry } from "../components/ScoreEntry";
-import { StandingsTable } from "../components/StandingsTable";
+import { StandingsTable, rankStyle } from "../components/StandingsTable";
 import { statusTone } from "./Home";
 
 type Run = (key: string, fn: () => Promise<unknown>) => Promise<void>;
@@ -878,17 +878,166 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
         </Card>
       )}
 
-      <Card>
-        <SectionHeader title="Standings" />
-        <StandingsTable standings={d.standings} highlightId={d.myPlayerId} />
-      </Card>
-
       <div id="players" className="scroll-mt-20">
-        <PlayersCard d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />
+        <LiveRosterCard d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />
       </div>
 
       {previous.length > 0 && <RoundHistory rounds={previous} nameOf={nameOf} />}
     </div>
+  );
+}
+
+// One list for the live session: the leaderboard IS the roster.
+function LiveRosterCard({ d, isOrganizer, run, busyKey }: ViewProps) {
+  const [guestName, setGuestName] = useState("");
+  const byId = new Map(d.players.map((p) => [p.id, p]));
+  const playing = d.standings.filter((s) => {
+    const p = byId.get(s.playerId);
+    return p && (p.status === "checked_in" || p.status === "confirmed");
+  });
+  const benched = d.players.filter((p) => p.status === "waitlist" || p.status === "dropped");
+  const inCount = d.counts.confirmed + d.counts.checkedIn;
+  const courtsUsed = Math.min(d.courts, Math.floor(d.counts.checkedIn / 4));
+  const sitting = courtsUsed > 0 ? d.counts.checkedIn - courtsUsed * 4 : d.counts.checkedIn;
+
+  return (
+    <Card>
+      <SectionHeader
+        title="Players & standings"
+        action={
+          <span className="tabular text-sm font-bold text-navy">
+            {inCount} <span className="font-medium text-muted">/ {d.maxPlayers}</span>
+          </span>
+        }
+      />
+      <ProgressBar value={inCount} max={d.maxPlayers} className="mb-1" />
+      <p className="mb-3 text-xs text-muted">
+        {courtsUsed} court{courtsUsed === 1 ? "" : "s"} per round
+        {sitting > 0 ? ` · ${sitting} sit${sitting === 1 ? "s" : ""} out each round` : " · everyone plays"}
+        {d.counts.confirmed > 0 && ` · ${d.counts.confirmed} not checked in`}
+      </p>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs uppercase tracking-wider text-muted">
+              <th className="py-2 pr-2 font-semibold">#</th>
+              <th className="py-2 pr-2 font-semibold">Player</th>
+              <th className="py-2 pr-2 text-right font-semibold">Pts</th>
+              <th className="hidden py-2 pr-2 text-right font-semibold sm:table-cell">W-L</th>
+              <th className="hidden py-2 pr-2 text-right font-semibold sm:table-cell">+/-</th>
+              {isOrganizer && <th className="py-2" />}
+            </tr>
+          </thead>
+          <tbody>
+            {playing.map((row, i) => {
+              const p = byId.get(row.playerId)!;
+              const me = p.id === d.myPlayerId;
+              return (
+                <tr key={row.playerId} className={cls("border-t border-line", me && "bg-lime-soft")}>
+                  <td className="py-2 pr-2">
+                    <span className={cls("inline-flex size-6 items-center justify-center rounded-full text-xs font-bold", rankStyle(i))}>
+                      {i + 1}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-2">
+                    <div className="flex items-center gap-2">
+                      <Avatar name={p.name} size="sm" ring={me} />
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-navy">
+                          {p.name}
+                          {p.isGuest && <span className="ml-1.5 text-xs font-medium text-faint">guest</span>}
+                          {me && <span className="ml-1.5 text-xs font-bold text-royal">you</span>}
+                        </p>
+                        <p className="text-[11px] text-muted">
+                          {p.status === "checked_in" ? "playing" : "not checked in"}
+                          {row.byes > 0 ? ` · sat out ${row.byes}` : ""}
+                          <span className="sm:hidden">
+                            {" "}
+                            · {row.wins}-{row.losses}
+                            {row.ties > 0 ? `-${row.ties}` : ""}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="tabular py-2 pr-2 text-right text-base font-black text-navy">{row.points}</td>
+                  <td className="tabular hidden py-2 pr-2 text-right text-muted sm:table-cell">
+                    {row.wins}-{row.losses}
+                    {row.ties > 0 ? `-${row.ties}` : ""}
+                  </td>
+                  <td className={cls("tabular hidden py-2 pr-2 text-right sm:table-cell", row.diff > 0 ? "text-mint-dark" : row.diff < 0 ? "text-rose-dark" : "text-faint")}>
+                    {row.diff > 0 ? `+${row.diff}` : row.diff}
+                  </td>
+                  {isOrganizer && (
+                    <td className="py-2 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {p.status === "confirmed" && (
+                          <Button size="sm" variant="subtle" onClick={() => run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, "checkin"))}>
+                            Check in
+                          </Button>
+                        )}
+                        <button
+                          className="rounded-full px-2 py-1 text-faint hover:bg-rose-soft hover:text-rose-dark"
+                          title="Remove from session (from the next round)"
+                          onClick={() => run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, "drop"))}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {benched.length > 0 && (
+        <div className="mt-3 border-t border-line pt-3">
+          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">Not playing</p>
+          {benched.map((p) => (
+            <div key={p.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
+              <span className="flex min-w-0 items-center gap-2">
+                <Avatar name={p.name} size="sm" className="opacity-60" />
+                <span className={cls("truncate font-semibold", p.status === "dropped" ? "text-muted line-through" : "text-navy")}>{p.name}</span>
+                {playerStatusBadge(p)}
+              </span>
+              {isOrganizer && (
+                <Button
+                  size="sm"
+                  variant="subtle"
+                  onClick={() => run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, p.status === "dropped" ? "restore" : "checkin"))}
+                >
+                  {p.status === "dropped" ? "Bring back" : "Bring in"}
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isOrganizer && (
+        <form
+          className="mt-3 flex gap-2 border-t border-line pt-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!guestName.trim()) return;
+            run("guest", async () => {
+              await Api.addGuest(d.id, guestName.trim());
+              setGuestName("");
+            });
+          }}
+        >
+          <Input value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Add a late arrival by name" />
+          <Button variant="secondary" busy={busyKey === "guest"} type="submit">
+            Add
+          </Button>
+        </form>
+      )}
+      {isOrganizer && <p className="mt-2 text-xs text-muted">Player changes apply from the next round dealt.</p>}
+    </Card>
   );
 }
 

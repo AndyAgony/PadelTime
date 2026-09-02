@@ -1,7 +1,7 @@
 import type { StandingRow } from "../../shared/types";
 import { cls } from "./ui";
 
-const rankStyle = (i: number) =>
+export const rankStyle = (i: number) =>
   i === 0
     ? "bg-lime text-navy"
     : i === 1
