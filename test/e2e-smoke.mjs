@@ -238,7 +238,7 @@ await org.getByRole("button", { name: "Undo round" }).click();
 await org.getByText("No rounds on the board").waitFor({ timeout: 10000 });
 await org.getByText("📺 TV board").first().waitFor();
 await shot(org, "13-empty-board");
-await org.getByRole("button", { name: "Deal round 1 →" }).click();
+await org.getByRole("button", { name: /Start round 1/ }).click();
 await org.getByText("Round 1").first().waitFor({ timeout: 15000 });
 await org.getByRole("button", { name: "Undo round" }).click();
 await org.getByRole("button", { name: "← Back to check-in" }).click();

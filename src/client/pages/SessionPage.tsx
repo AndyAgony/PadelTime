@@ -13,7 +13,6 @@ import {
   CopyButton,
   ErrorNote,
   Field,
-  IconButton,
   Input,
   InfoRow,
   Modal,
@@ -109,34 +108,80 @@ function PillLink({ href, label, children }: { href: string; label: string; chil
   );
 }
 
-function Hero({ d, isOrganizer, onSettings }: { d: SessionDetail; isOrganizer: boolean; onSettings: () => void }) {
+function ShareIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3v13" />
+      <path d="M8 7l4-4 4 4" />
+      <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+    </svg>
+  );
+}
+
+// The standard share button: opens the phone's share sheet (WhatsApp, iMessage…)
+// and falls back to copying the invite link on desktop.
+function ShareButton({ d }: { d: SessionDetail }) {
+  const [copied, setCopied] = useState(false);
   const joinUrl = `${window.location.origin}/join/${d.inviteCode}`;
+  const share = async () => {
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: d.name, text: `Join "${d.name}" on PadelTime`, url: joinUrl });
+        return;
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return; // closed the sheet — nothing to do
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(joinUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      window.prompt("Copy this link:", joinUrl);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={share}
+      title="Share the invite link with players"
+      className="flex h-10 items-center gap-1.5 rounded-full bg-navy px-3.5 text-xs font-bold text-white shadow-md hover:bg-royal"
+    >
+      {copied ? (
+        "✓ Link copied"
+      ) : (
+        <>
+          <ShareIcon />
+          Share
+        </>
+      )}
+    </button>
+  );
+}
+
+function Hero({ d, isOrganizer, onSettings }: { d: SessionDetail; isOrganizer: boolean; onSettings: () => void }) {
   const shareable = ["open", "checkin", "active"].includes(d.status);
   return (
     <div>
-      <div className="court-banner relative h-36 rounded-3xl">
-        <div className="absolute inset-x-3 top-3 flex items-center justify-between">
-          <Link to="/app" aria-label="Back to sessions">
+      {/* Back arrow, then the action row with Share on the far right. On phones the
+          row drops to its own line and the banner grows with it, so it never slides
+          under the card. */}
+      <div className="court-banner relative min-h-36 rounded-3xl px-3 pb-16 pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-3">
+          <Link to="/app" aria-label="Back to sessions" className="shrink-0">
             <span className="flex size-10 items-center justify-center rounded-full bg-white text-navy shadow-md">←</span>
           </Link>
-          <div className="flex gap-2">
-            {shareable && (
-              <IconButton
-                label="Copy invite link"
-                onClick={async (e) => {
-                  const el = e.currentTarget;
-                  try {
-                    await navigator.clipboard.writeText(joinUrl);
-                    el.textContent = "✓";
-                    setTimeout(() => (el.textContent = "⤴"), 1200);
-                  } catch {
-                    window.prompt("Copy this link:", joinUrl);
-                  }
-                }}
-              >
-                ⤴
-              </IconButton>
-            )}
+          <div className="ml-auto flex flex-wrap justify-end gap-1.5">
             {d.status !== "draft" && d.status !== "cancelled" && (
               <PillLink href={`/board/${d.inviteCode}`} label="Open the live TV board in a new tab">
                 📺 TV board
@@ -147,26 +192,29 @@ function Hero({ d, isOrganizer, onSettings }: { d: SessionDetail; isOrganizer: b
                 🖨 Print
               </PillLink>
             )}
-            {isOrganizer && (
-              <IconButton label="Settings" onClick={onSettings}>
-                ⋯
-              </IconButton>
-            )}
+            {shareable && <ShareButton d={d} />}
           </div>
         </div>
       </div>
       <Card className="relative -mt-12 mx-3 shadow-lg">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-black leading-tight tracking-tight text-navy">{d.name}</h1>
-            <p className="mt-1 text-sm text-muted">{fmtTimeRange(d.startsAt, d.durationMin)}</p>
-            {d.venue && <p className="text-sm text-muted">📍 {d.venue}</p>}
-          </div>
-          <Badge tone={statusTone(d.status)} className="shrink-0">
-            {SESSION_STATUS_LABEL[d.status]}
-          </Badge>
+        <div className="flex items-center justify-between gap-3">
+          <Badge tone={statusTone(d.status)}>{SESSION_STATUS_LABEL[d.status]}</Badge>
+          {isOrganizer && (
+            <button
+              type="button"
+              aria-label="Settings"
+              title="Session settings"
+              onClick={onSettings}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-canvas text-lg font-bold text-navy hover:bg-line"
+            >
+              ⋯
+            </button>
+          )}
         </div>
-        <div className="mt-4 grid grid-cols-4 gap-2 border-t border-line pt-4">
+        <h1 className="mt-2 text-2xl font-black leading-tight tracking-tight text-navy">{d.name}</h1>
+        <p className="mt-1 text-sm text-muted">{fmtTimeRange(d.startsAt, d.durationMin)}</p>
+        {d.venue && <p className="text-sm text-muted">📍 {d.venue}</p>}
+        <div className="mt-4 grid grid-cols-[1.5fr_1fr_1fr_1fr] gap-2 border-t border-line pt-4">
           <StatCell label="Format" value="Americano" />
           <StatCell label="Points" value={d.pointsPerMatch} />
           <StatCell label="Courts" value={d.courts} />
@@ -250,18 +298,30 @@ function LifecycleStepper({ d, isOrganizer, run, busyKey }: ViewProps) {
 // Rules
 
 function RulesCard({ d }: { d: SessionDetail }) {
+  // Open before the session starts (new players read them); folded once play is under way.
   const [open, setOpen] = useState(["draft", "open", "checkin"].includes(d.status));
   const est = estimateRounds(d.durationMin, d.pointsPerMatch);
   return (
-    <Card>
-      <button type="button" className="flex w-full items-center justify-between text-left" onClick={() => setOpen((o) => !o)}>
-        <span className="text-lg font-black text-navy">
-          Americano tournament <span className="text-base font-semibold text-muted">— the rules</span>
+    <Card className={cls("transition-colors", !open && "hover:border-line-strong")}>
+      <button
+        type="button"
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 text-left"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-canvas text-xl">📜</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-base font-black leading-tight text-navy">The rules of Americano tournament</span>
+          <span className="mt-0.5 block truncate text-xs text-muted">
+            {open ? "How the night works" : "Tap to read how the night works"}
+          </span>
         </span>
-        <span className="text-faint">{open ? "▴" : "▾"}</span>
+        <span className="flex h-8 shrink-0 items-center rounded-full bg-canvas px-3 text-xs font-bold text-navy">
+          {open ? "Hide ▴" : "Read ▾"}
+        </span>
       </button>
       {open && (
-        <div className="mt-2 divide-y divide-line">
+        <div className="mt-3 divide-y divide-line border-t border-line pt-1">
           <InfoRow icon="🔄">
             <b>New partner every round.</b> Pairings rotate for maximum variety — it's you against the field, not fixed
             teams.
@@ -756,12 +816,12 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
           {isOrganizer ? (
             <>
               <p className="text-sm text-muted">
-                Every round has been undone. Deal a fresh round 1 with the {d.counts.checkedIn} checked-in player
+                Every round has been undone. Start a fresh round 1 with the {d.counts.checkedIn} checked-in player
                 {d.counts.checkedIn === 1 ? "" : "s"}, or go back to check-in to change who's playing.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button busy={busyKey === "next"} disabled={d.counts.checkedIn < 4} onClick={() => run("next", () => Api.nextRound(d.id))}>
-                  Deal round 1 →
+                  ▶️ Start round 1
                 </Button>
                 <Button variant="secondary" busy={busyKey === "back"} onClick={() => run("back", () => Api.sessionAction(d.id, "back_to_checkin"))}>
                   ← Back to check-in
@@ -772,7 +832,7 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
               </div>
             </>
           ) : (
-            <p className="text-sm text-muted">Waiting for the organizer to deal round 1.</p>
+            <p className="text-sm text-muted">Waiting for the organizer to start round 1.</p>
           )}
         </Card>
       )}
