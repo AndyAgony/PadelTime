@@ -94,6 +94,21 @@ export function SessionPage() {
 // ---------------------------------------------------------------------------
 // Hero: court banner + floating card with the essentials
 
+function PillLink({ href, label, children }: { href: string; label: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      title={label}
+      aria-label={label}
+      className="flex h-10 items-center gap-1 rounded-full bg-white px-3 text-xs font-bold text-navy shadow-md ring-1 ring-line hover:bg-canvas"
+    >
+      {children}
+    </a>
+  );
+}
+
 function Hero({ d, isOrganizer, onSettings }: { d: SessionDetail; isOrganizer: boolean; onSettings: () => void }) {
   const joinUrl = `${window.location.origin}/join/${d.inviteCode}`;
   const shareable = ["open", "checkin", "active"].includes(d.status);
@@ -122,10 +137,15 @@ function Hero({ d, isOrganizer, onSettings }: { d: SessionDetail; isOrganizer: b
                 ⤴
               </IconButton>
             )}
+            {d.status !== "draft" && d.status !== "cancelled" && (
+              <PillLink href={`/board/${d.inviteCode}`} label="Open the live TV board in a new tab">
+                📺 TV board
+              </PillLink>
+            )}
             {isOrganizer && (
-              <a href={`/print?session=${d.id}`} target="_blank" rel="noreferrer">
-                <IconButton label="Printable pen & paper sheet">🖨</IconButton>
-              </a>
+              <PillLink href={`/print?session=${d.id}`} label="Printable pen & paper sheet">
+                🖨 Print
+              </PillLink>
             )}
             {isOrganizer && (
               <IconButton label="Settings" onClick={onSettings}>
@@ -725,11 +745,37 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
   const nameOf = useNameOf(d);
   const current = d.rounds[d.rounds.length - 1];
   const previous = d.rounds.slice(0, -1);
-  const [showRoster, setShowRoster] = useState(false);
   const est = estimateRounds(d.durationMin, d.pointsPerMatch);
+  const scrollToPlayers = () => document.getElementById("players")?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
     <div className="space-y-4">
+      {!current && (
+        <Card className="border-royal/30">
+          <SectionHeader title="No rounds on the board" />
+          {isOrganizer ? (
+            <>
+              <p className="text-sm text-muted">
+                Every round has been undone. Deal a fresh round 1 with the {d.counts.checkedIn} checked-in player
+                {d.counts.checkedIn === 1 ? "" : "s"}, or go back to check-in to change who's playing.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button busy={busyKey === "next"} disabled={d.counts.checkedIn < 4} onClick={() => run("next", () => Api.nextRound(d.id))}>
+                  Deal round 1 →
+                </Button>
+                <Button variant="secondary" busy={busyKey === "back"} onClick={() => run("back", () => Api.sessionAction(d.id, "back_to_checkin"))}>
+                  ← Back to check-in
+                </Button>
+                <Button variant="ghost" onClick={scrollToPlayers}>
+                  Manage players ↓
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted">Waiting for the organizer to deal round 1.</p>
+          )}
+        </Card>
+      )}
       {isOrganizer && d.warnings.length > 0 && (
         <div className="rounded-2xl bg-amber-soft px-4 py-3 text-sm font-medium text-amber-dark">
           {d.warnings.map((w, i) => (
@@ -818,16 +864,17 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
             >
               Finish session
             </Button>
+            <a href={`/board/${d.inviteCode}`} target="_blank" rel="noreferrer">
+              <Button variant="secondary">📺 TV board</Button>
+            </a>
+            <Button variant="ghost" onClick={scrollToPlayers}>
+              Manage players ↓
+            </Button>
           </div>
-          <button className="mt-3 text-sm font-semibold text-royal hover:text-royal-dark" onClick={() => setShowRoster((s) => !s)}>
-            {showRoster ? "Hide players" : "Manage players (late arrivals, drop-outs)"}
-          </button>
-          {showRoster && (
-            <div className="mt-3">
-              <PlayersCard d={d} isOrganizer run={run} busyKey={busyKey} />
-              <p className="mt-2 text-xs text-muted">Changes apply from the next generated round.</p>
-            </div>
-          )}
+          <p className="mt-2 text-xs text-muted">
+            Put the TV board on a courtside iPad or TV — it refreshes itself with courts, scores and the leaderboard.
+            Player changes (late arrivals, drop-outs) apply from the next round.
+          </p>
         </Card>
       )}
 
@@ -835,6 +882,10 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
         <SectionHeader title="Standings" />
         <StandingsTable standings={d.standings} highlightId={d.myPlayerId} />
       </Card>
+
+      <div id="players" className="scroll-mt-20">
+        <PlayersCard d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} />
+      </div>
 
       {previous.length > 0 && <RoundHistory rounds={previous} nameOf={nameOf} />}
     </div>

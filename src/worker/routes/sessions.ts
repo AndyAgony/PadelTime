@@ -165,6 +165,15 @@ sessionRoutes.post("/sessions/:id/status", async (c) => {
       await setStatus("complete");
       return c.json({ ok: true });
     }
+    case "back_to_checkin": {
+      // Only once the board is empty — undoing rounds is the way to get there.
+      if (session.status !== "active") return c.json({ error: "Session isn't live" }, 400);
+      if ((await loadRounds(db, session.id)).length > 0) {
+        return c.json({ error: "Undo the rounds first" }, 400);
+      }
+      await setStatus("checkin");
+      return c.json({ ok: true });
+    }
     case "reopen": {
       if (session.status !== "complete") return c.json({ error: "Session isn't finished" }, 400);
       await setStatus("active");
