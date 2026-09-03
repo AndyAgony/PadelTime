@@ -81,12 +81,17 @@ sessionRoutes.patch("/sessions/:id", async (c) => {
     patch.format = format.key;
   }
 
-  const preActive = ["draft", "open", "checkin"].includes(session.status);
-  if (preActive) {
-    const maxPlayers = asInt(body.maxPlayers);
-    if (maxPlayers != null) patch.maxPlayers = Math.min(Math.max(maxPlayers, 4), 64);
-    const points = asInt(body.pointsPerMatch);
-    if (points != null) patch.pointsPerMatch = Math.min(Math.max(points, 4), 99);
+  // Max players can change any time (extra people turn up mid-session); the
+  // points per match are locked once a round has been dealt, since every
+  // score on the board is relative to that total.
+  const maxPlayers = asInt(body.maxPlayers);
+  if (maxPlayers != null) patch.maxPlayers = Math.min(Math.max(maxPlayers, 4), 64);
+  const points = asInt(body.pointsPerMatch);
+  if (points != null && points !== session.pointsPerMatch) {
+    if ((await loadRounds(db, session.id)).length > 0) {
+      return c.json({ error: "Points per match can't change once a round has been dealt" }, 400);
+    }
+    patch.pointsPerMatch = Math.min(Math.max(points, 4), 99);
   }
   if (Object.keys(patch).length === 0) return c.json({ ok: true });
   patch.updatedAt = now();

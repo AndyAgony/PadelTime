@@ -443,7 +443,7 @@ function SettingsModal({
     pointsPerMatch: d.pointsPerMatch,
     format: d.format,
   });
-  const preActive = ["draft", "open", "checkin"].includes(d.status);
+  const pointsLocked = d.rounds.length > 0;
   const num = (v: string, fallback: number) => {
     const n = parseInt(v, 10);
     return Number.isFinite(n) ? n : fallback;
@@ -485,13 +485,15 @@ function SettingsModal({
             <Input type="number" min={1} max={12} value={form.courts} onChange={(e) => setForm({ ...form, courts: num(e.target.value, d.courts) })} />
           </Field>
           <Field label="Max players">
-            <Input type="number" min={4} max={64} disabled={!preActive} value={form.maxPlayers} onChange={(e) => setForm({ ...form, maxPlayers: num(e.target.value, d.maxPlayers) })} />
+            <Input type="number" min={4} max={64} value={form.maxPlayers} onChange={(e) => setForm({ ...form, maxPlayers: num(e.target.value, d.maxPlayers) })} />
           </Field>
           <Field label="Points">
-            <Input type="number" min={4} max={99} disabled={!preActive} value={form.pointsPerMatch} onChange={(e) => setForm({ ...form, pointsPerMatch: num(e.target.value, d.pointsPerMatch) })} />
+            <Input type="number" min={4} max={99} disabled={pointsLocked} value={form.pointsPerMatch} onChange={(e) => setForm({ ...form, pointsPerMatch: num(e.target.value, d.pointsPerMatch) })} />
           </Field>
         </div>
-        {!preActive && <p className="text-xs text-muted">Max players and points lock once the session starts. Courts can change any time.</p>}
+        {pointsLocked && (
+          <p className="text-xs text-muted">Points per match are locked once a round has been dealt. Max players and courts can change any time.</p>
+        )}
         <Button
           className="w-full"
           busy={busyKey === "settings"}
