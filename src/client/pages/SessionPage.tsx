@@ -297,10 +297,20 @@ function LifecycleStepper({ d, isOrganizer, run, busyKey }: ViewProps) {
 // ---------------------------------------------------------------------------
 // Rules
 
+function RuleGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="pt-3">
+      <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wider text-faint">{label}</p>
+      <div className="divide-y divide-line">{children}</div>
+    </div>
+  );
+}
+
 function RulesCard({ d }: { d: SessionDetail }) {
   // Open before the session starts (new players read them); folded once play is under way.
   const [open, setOpen] = useState(["draft", "open", "checkin"].includes(d.status));
   const est = estimateRounds(d.durationMin, d.pointsPerMatch);
+  const half = Math.ceil(d.pointsPerMatch / 2);
   return (
     <Card className={cls("transition-colors", !open && "hover:border-line-strong")}>
       <button
@@ -313,7 +323,7 @@ function RulesCard({ d }: { d: SessionDetail }) {
         <span className="min-w-0 flex-1">
           <span className="block text-base font-black leading-tight text-navy">The rules of Americano tournament</span>
           <span className="mt-0.5 block truncate text-xs text-muted">
-            {open ? "How the night works" : "Tap to read how the night works"}
+            {open ? "Format · scoring · serving · winning" : "Tap to read how the night works"}
           </span>
         </span>
         <span className="flex h-8 shrink-0 items-center rounded-full bg-canvas px-3 text-xs font-bold text-navy">
@@ -321,32 +331,56 @@ function RulesCard({ d }: { d: SessionDetail }) {
         </span>
       </button>
       {open && (
-        <div className="mt-3 divide-y divide-line border-t border-line pt-1">
-          <InfoRow icon="🔄">
-            <b>New partner every round.</b> Pairings rotate for maximum variety — it's you against the field, not fixed
-            teams.
-          </InfoRow>
-          <InfoRow icon="🎯">
-            Each match is one game to <b>{d.pointsPerMatch} total rally points</b> (e.g. 14–10). Every point counts,
-            serve rotates, no deuce.
-          </InfoRow>
-          <InfoRow icon="🧮">
-            <b>You score as an individual</b> — both players on a team bank the team's points.
-          </InfoRow>
-          <InfoRow icon="🏟️">
-            {d.courts} court{d.courts === 1 ? "" : "s"} per round. Extra players sit out, and sit-outs rotate so everyone
-            rests about equally.
-          </InfoRow>
-          <InfoRow icon="✅">Players enter the score, the other team confirms it. The organizer can always correct it.</InfoRow>
-          <InfoRow icon="🏆">
-            <b>Most total points at the end wins.</b> Ties are allowed.
-          </InfoRow>
-          {est && (
-            <InfoRow icon="⏱">
-              {d.durationMin} min of court time fits roughly <b>{est} rounds</b> — rounds keep coming as long as you want
-              to play.
+        <div className="mt-3 border-t border-line">
+          <RuleGroup label="Format">
+            <InfoRow icon="🔄">
+              <b>New partner every round.</b> Pairings rotate for maximum variety — it's you against the field, not
+              fixed teams.
             </InfoRow>
-          )}
+            <InfoRow icon="🏟️">
+              {d.courts} court{d.courts === 1 ? "" : "s"} per round. Extra players sit out, and sit-outs rotate so
+              everyone rests about equally.
+            </InfoRow>
+          </RuleGroup>
+
+          <RuleGroup label="Scoring">
+            <InfoRow icon="🎯">
+              Each match is one game to <b>{d.pointsPerMatch} total rally points</b> (e.g. 14–10). Every point counts,
+              no deuce, no advantage.
+            </InfoRow>
+            <InfoRow icon="🧮">
+              <b>You score as an individual</b> — both players on a team bank the team's points.
+            </InfoRow>
+            <InfoRow icon="✅">
+              Players enter the score, the other team confirms it. The organizer can always correct it.
+            </InfoRow>
+          </RuleGroup>
+
+          <RuleGroup label="Serving">
+            <InfoRow icon="🎾">
+              <b>Serve changes every 4 points.</b> Each player serves 4 in a row — the top team's first player, then
+              the bottom team's first, then each team's second player — and round again until the match is done.
+            </InfoRow>
+            <InfoRow icon="📐">
+              Serve diagonally, starting from the right-hand side and alternating sides each point. Underhand after one
+              bounce, hit below the waist, two attempts — a normal padel serve.
+            </InfoRow>
+            <InfoRow icon="↔️">
+              The team on top of the court card serves first. Switch ends halfway, when the score adds up to {half}.
+            </InfoRow>
+          </RuleGroup>
+
+          <RuleGroup label="Winning">
+            <InfoRow icon="🏆">
+              <b>Most total points at the end wins.</b> Ties are allowed.
+            </InfoRow>
+            {est && (
+              <InfoRow icon="⏱">
+                {d.durationMin} min of court time fits roughly <b>{est} rounds</b> — rounds keep coming as long as you
+                want to play.
+              </InfoRow>
+            )}
+          </RuleGroup>
         </div>
       )}
     </Card>

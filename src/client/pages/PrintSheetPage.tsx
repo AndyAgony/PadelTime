@@ -85,7 +85,7 @@ function anonymousSheet(players: number, courts: number, rounds: number, points:
   const planned = planRounds(ids, courts, rounds, seed, []);
   return {
     title: "PadelTime · AMERICANO",
-    subtitle: `${players} players · ${courts} court${courts === 1 ? "" : "s"} · ${rounds} rounds`,
+    subtitle: `${players} players · ${courts} court${courts === 1 ? "" : "s"}`,
     when: null,
     venue: null,
     players: ids.map((id) => ({ number: Number(id), name: null })),
@@ -404,8 +404,9 @@ export function PrintSheetPage() {
             </table>
 
             <p className="mt-1.5 text-[9px] leading-tight text-zinc-500">
-              “—” = sitting that round out. Both partners write their team's score in their own row each round;
-              highest total wins. Pairings maximise partner &amp; opponent variety — padeltime.
+              “—” = sitting that round out. Game to {sheet.points} total points, no deuce. <b>Serve changes every 4
+              points</b> (teams alternate, each player serves 4 in a row); the first-listed pair serves first. Both partners
+              write their team's score in their own row each round; highest total wins — padeltime.
             </p>
           </div>
         </div>
