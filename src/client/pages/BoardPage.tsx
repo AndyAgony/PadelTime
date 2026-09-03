@@ -19,6 +19,7 @@ export function BoardPage() {
 
   const current = data.rounds[data.rounds.length - 1];
   const done = data.status === "complete";
+  const paused = data.status === "checkin" && data.rounds.length > 0;
   const champion = done ? data.standings[0] : null;
 
   return (
@@ -30,7 +31,14 @@ export function BoardPage() {
             <h1 className="text-4xl font-black tracking-tight text-navy sm:text-5xl">{data.name}</h1>
           </div>
           <div className="flex items-center gap-3">
-            {current && !done && <span className="rounded-full bg-royal px-5 py-2 text-2xl font-black text-white">ROUND {current.number}</span>}
+            {current && !done && !paused && (
+              <span className="rounded-full bg-royal px-5 py-2 text-2xl font-black text-white">ROUND {current.number}</span>
+            )}
+            {paused && (
+              <span className="rounded-full bg-amber-soft px-5 py-2 text-2xl font-black text-amber-dark">
+                ⏸ PAUSED · {data.rounds.length} ROUND{data.rounds.length === 1 ? "" : "S"} PLAYED
+              </span>
+            )}
             {done && (
               <Badge tone="emerald" className="text-sm">
                 FINAL

@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Api, usePoll } from "../lib/api";
 import { fmtTimeRange, fromLocalInputValue, toLocalInputValue } from "../lib/format";
@@ -19,6 +19,7 @@ import {
   PageSpinner,
   ProgressBar,
   SectionHeader,
+  Spinner,
   StatCell,
   cls,
 } from "../components/ui";
@@ -198,7 +199,9 @@ function Hero({ d, isOrganizer, onSettings }: { d: SessionDetail; isOrganizer: b
       </div>
       <Card className="relative -mt-12 mx-3 shadow-lg">
         <div className="flex items-center justify-between gap-3">
-          <Badge tone={statusTone(d.status)}>{SESSION_STATUS_LABEL[d.status]}</Badge>
+          <Badge tone={statusTone(d.status)}>
+            {d.status === "checkin" && d.rounds.length > 0 ? "Paused" : SESSION_STATUS_LABEL[d.status]}
+          </Badge>
           {isOrganizer && (
             <button
               type="button"
@@ -596,17 +599,25 @@ function PlayersCard({ d, isOrganizer, run, busyKey, checkinMode = false }: View
             <div className="flex shrink-0 items-center gap-1.5">
               {playerStatusBadge(p)}
               {isOrganizer && p.status === "waitlist" && (
-                <Button size="sm" variant="subtle" onClick={() => run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, "promote"))}>
+                <Button
+                  size="sm"
+                  variant="subtle"
+                  busy={busyKey === `p-${p.id}`}
+                  onClick={() => run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, "promote"))}
+                >
                   Bring in
                 </Button>
               )}
               {isOrganizer && (
                 <button
-                  className="rounded-full px-2 py-1 text-faint hover:bg-rose-soft hover:text-rose-dark"
-                  title="Remove from session"
+                  type="button"
+                  className="flex size-8 items-center justify-center rounded-full text-faint hover:bg-rose-soft hover:text-rose-dark disabled:pointer-events-none"
+                  title="Remove from the session"
+                  aria-label={`Remove ${p.name}`}
+                  disabled={busyKey === `p-${p.id}`}
                   onClick={() => run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, "drop"))}
                 >
-                  ✕
+                  {busyKey === `p-${p.id}` ? <Spinner className="size-4" /> : "✕"}
                 </button>
               )}
             </div>
@@ -669,7 +680,11 @@ function MyStatusCard({ d, run, busyKey }: { d: SessionDetail; run: Run; busyKey
           </Button>
         </div>
       ) : me.status === "checked_in" ? (
-        <p className="text-sm font-semibold text-navy">You're checked in. Pairings drop when the organizer starts the session.</p>
+        <p className="text-sm font-semibold text-navy">
+          {d.rounds.length > 0
+            ? "You're checked in — the game resumes when the organizer deals the next round."
+            : "You're checked in. Pairings drop when the organizer starts the session."}
+        </p>
       ) : (
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold text-navy">You're in ✓</p>
@@ -779,13 +794,20 @@ function CheckinView({ d, isOrganizer, run, busyKey }: ViewProps) {
   const n = d.counts.checkedIn;
   const courtsUsed = Math.min(d.courts, Math.floor(n / 4));
   const byes = courtsUsed > 0 ? n - courtsUsed * 4 : n;
+  // Check-in with rounds on the books = the game is paused between rounds.
+  const paused = d.rounds.length > 0;
+  const nextRound = d.rounds.length + 1;
   return (
     <div className="space-y-4">
       <MyStatusCard d={d} run={run} busyKey={busyKey} />
-      {isOrganizer && (
+      {isOrganizer ? (
         <Card className="border-royal/30">
-          <SectionHeader title="Check-in" />
-          <p className="text-sm text-muted">Only checked-in players get scheduled — one no-show can wreck a round otherwise.</p>
+          <SectionHeader title={paused ? "Game paused" : "Check-in"} />
+          <p className="text-sm text-muted">
+            {paused
+              ? `${d.rounds.length} round${d.rounds.length === 1 ? "" : "s"} played — scores and standings are kept. Late arrivals join with the invite link, drop-outs leave, and Resume deals round ${nextRound} with whoever is checked in.`
+              : "Only checked-in players get scheduled — one no-show can wreck a round otherwise."}
+          </p>
           <div className="mt-3 rounded-2xl bg-canvas px-4 py-3 text-sm text-ink">
             <span className="font-black text-navy">{n}</span> checked in → <span className="font-black text-navy">{courtsUsed}</span> court
             {courtsUsed === 1 ? "" : "s"} per round
@@ -798,16 +820,37 @@ function CheckinView({ d, isOrganizer, run, busyKey }: ViewProps) {
             {courtsUsed === 0 && <span className="font-semibold text-amber-dark"> — need at least 4</span>}
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
+            <Button busy={busyKey === "start"} disabled={courtsUsed === 0} onClick={() => run("start", () => Api.sessionAction(d.id, "start"))}>
+              {paused ? `▶️ Resume · round ${nextRound}` : "Start session →"}
+            </Button>
             <Button variant="secondary" busy={busyKey === "checkin_all"} onClick={() => run("checkin_all", () => Api.sessionAction(d.id, "checkin_all"))}>
               Everyone's here
             </Button>
-            <Button busy={busyKey === "start"} disabled={courtsUsed === 0} onClick={() => run("start", () => Api.sessionAction(d.id, "start"))}>
-              Start session →
-            </Button>
           </div>
         </Card>
+      ) : (
+        paused && (
+          <Card>
+            <p className="text-sm text-muted">
+              The game is paused between rounds — it resumes when the organizer deals round {nextRound}.
+            </p>
+          </Card>
+        )
       )}
       <PlayersCard d={d} isOrganizer={isOrganizer} run={run} busyKey={busyKey} checkinMode />
+      {paused && (
+        <Card>
+          <SectionHeader
+            title="Standings so far"
+            action={
+              <span className="text-xs font-semibold text-muted">
+                after {d.rounds.length} round{d.rounds.length === 1 ? "" : "s"}
+              </span>
+            }
+          />
+          <StandingsTable standings={d.standings} highlightId={d.myPlayerId} compact />
+        </Card>
+      )}
       <InviteCard d={d} />
     </div>
   );
@@ -839,6 +882,7 @@ function useNameOf(d: SessionDetail) {
 
 function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
   const nameOf = useNameOf(d);
+  const me = d.players.find((p) => p.id === d.myPlayerId);
   const current = d.rounds[d.rounds.length - 1];
   const previous = d.rounds.slice(0, -1);
   const est = estimateRounds(d.durationMin, d.pointsPerMatch);
@@ -853,14 +897,14 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
             <>
               <p className="text-sm text-muted">
                 Every round has been undone. Start a fresh round 1 with the {d.counts.checkedIn} checked-in player
-                {d.counts.checkedIn === 1 ? "" : "s"}, or go back to check-in to change who's playing.
+                {d.counts.checkedIn === 1 ? "" : "s"}, or pause the game to change who's playing.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button busy={busyKey === "next"} disabled={d.counts.checkedIn < 4} onClick={() => run("next", () => Api.nextRound(d.id))}>
                   ▶️ Start round 1
                 </Button>
-                <Button variant="secondary" busy={busyKey === "back"} onClick={() => run("back", () => Api.sessionAction(d.id, "back_to_checkin"))}>
-                  ← Back to check-in
+                <Button variant="secondary" busy={busyKey === "pause"} onClick={() => run("pause", () => Api.sessionAction(d.id, "pause"))}>
+                  ⏸ Pause game
                 </Button>
                 <Button variant="ghost" onClick={scrollToPlayers}>
                   Manage players ↓
@@ -880,7 +924,29 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
         </div>
       )}
 
-      {!isOrganizer && d.myPlayerId && current && <MyMatchCard d={d} round={current} nameOf={nameOf} run={run} busyKey={busyKey} />}
+      {!isOrganizer && me && me.status === "checked_in" && current && (
+        <MyMatchCard d={d} round={current} nameOf={nameOf} run={run} busyKey={busyKey} />
+      )}
+      {!isOrganizer && me && me.status === "confirmed" && (
+        <Card className="border-royal/30 bg-royal-soft/40">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-bold text-navy">At the courts?</p>
+              <p className="text-xs text-muted">Check in and you're dealt in from the next round.</p>
+            </div>
+            <Button busy={busyKey === "selfcheckin"} onClick={() => run("selfcheckin", () => Api.selfCheckin(d.id))}>
+              ✓ I'm here
+            </Button>
+          </div>
+        </Card>
+      )}
+      {!isOrganizer && me && me.status === "waitlist" && (
+        <Card className="border-amber-soft bg-amber-soft/40">
+          <p className="text-sm font-semibold text-amber-dark">
+            You're on the waitlist — the organizer can bring you in between rounds.
+          </p>
+        </Card>
+      )}
 
       {current && (
         <Card>
@@ -952,6 +1018,19 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
               Undo round
             </Button>
             <Button
+              variant="secondary"
+              busy={busyKey === "pause"}
+              disabled={!current.complete}
+              title={
+                current.complete
+                  ? "Back to check-in between rounds — every round and the standings are kept"
+                  : "Enter all of this round's scores first"
+              }
+              onClick={() => run("pause", () => Api.sessionAction(d.id, "pause"))}
+            >
+              ⏸ Pause game
+            </Button>
+            <Button
               variant="outline"
               busy={busyKey === "finish"}
               onClick={() => {
@@ -969,7 +1048,8 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
           </div>
           <p className="mt-2 text-xs text-muted">
             Put the TV board on a courtside iPad or TV — it refreshes itself with courts, scores and the leaderboard.
-            Player changes (late arrivals, drop-outs) apply from the next round.
+            Late arrivals can join with the invite link at any time; player changes apply from the next round. Pause
+            between rounds for a fresh check-in.
           </p>
         </Card>
       )}
@@ -987,6 +1067,32 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
 function LiveRosterCard({ d, isOrganizer, run, busyKey }: ViewProps) {
   const [guestName, setGuestName] = useState("");
   const byId = new Map(d.players.map((p) => [p.id, p]));
+  // Optimistic removal: the row fades the moment ✕ is tapped and stays that way
+  // until the server confirms it (or comes back if the request fails).
+  const [removing, setRemoving] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    setRemoving((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set([...prev].filter((id) => byId.get(id)?.status !== "dropped"));
+      return next.size === prev.size ? prev : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d.players]);
+  const remove = (id: string) => {
+    setRemoving((prev) => new Set(prev).add(id));
+    run(`p-${id}`, async () => {
+      try {
+        await Api.playerAction(d.id, id, "drop");
+      } catch (e) {
+        setRemoving((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        throw e;
+      }
+    });
+  };
   const playing = d.standings.filter((s) => {
     const p = byId.get(s.playerId);
     return p && (p.status === "checked_in" || p.status === "confirmed");
@@ -1030,7 +1136,10 @@ function LiveRosterCard({ d, isOrganizer, run, busyKey }: ViewProps) {
               const p = byId.get(row.playerId)!;
               const me = p.id === d.myPlayerId;
               return (
-                <tr key={row.playerId} className={cls("border-t border-line", me && "bg-lime-soft")}>
+                <tr
+                  key={row.playerId}
+                  className={cls("border-t border-line transition-opacity", me && "bg-lime-soft", removing.has(p.id) && "opacity-40")}
+                >
                   <td className="py-2 pr-2">
                     <span className={cls("inline-flex size-6 items-center justify-center rounded-full text-xs font-bold", rankStyle(i))}>
                       {i + 1}
@@ -1069,16 +1178,24 @@ function LiveRosterCard({ d, isOrganizer, run, busyKey }: ViewProps) {
                     <td className="py-2 text-right">
                       <div className="flex items-center justify-end gap-1">
                         {p.status === "confirmed" && (
-                          <Button size="sm" variant="subtle" onClick={() => run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, "checkin"))}>
+                          <Button
+                            size="sm"
+                            variant="subtle"
+                            busy={busyKey === `p-${p.id}`}
+                            onClick={() => run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, "checkin"))}
+                          >
                             Check in
                           </Button>
                         )}
                         <button
-                          className="rounded-full px-2 py-1 text-faint hover:bg-rose-soft hover:text-rose-dark"
-                          title="Remove from session (from the next round)"
-                          onClick={() => run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, "drop"))}
+                          type="button"
+                          className="flex size-8 items-center justify-center rounded-full text-faint hover:bg-rose-soft hover:text-rose-dark disabled:pointer-events-none"
+                          title="Remove from the session (from the next round)"
+                          aria-label={`Remove ${p.name}`}
+                          disabled={removing.has(p.id)}
+                          onClick={() => remove(p.id)}
                         >
-                          ✕
+                          {removing.has(p.id) ? <Spinner className="size-4" /> : "✕"}
                         </button>
                       </div>
                     </td>
@@ -1104,6 +1221,7 @@ function LiveRosterCard({ d, isOrganizer, run, busyKey }: ViewProps) {
                 <Button
                   size="sm"
                   variant="subtle"
+                  busy={busyKey === `p-${p.id}`}
                   onClick={() => run(`p-${p.id}`, () => Api.playerAction(d.id, p.id, p.status === "dropped" ? "restore" : "checkin"))}
                 >
                   {p.status === "dropped" ? "Bring back" : "Bring in"}
@@ -1221,11 +1339,18 @@ function MyMatchCard({
   const [editing, setEditing] = useState(false);
 
   if (!myMatch) {
+    const sitting = round.byes.includes(me);
     return (
       <Card className="border-amber-soft bg-amber-soft/40 text-center">
-        <p className="text-3xl">🧘</p>
-        <p className="mt-1 font-black text-navy">You're sitting round {round.number} out</p>
-        <p className="text-sm text-muted">Grab a drink — you're back in the next one.</p>
+        <p className="text-3xl">{sitting ? "🧘" : "👋"}</p>
+        <p className="mt-1 font-black text-navy">
+          {sitting ? `You're sitting round ${round.number} out` : `You're in from round ${round.number + 1}`}
+        </p>
+        <p className="text-sm text-muted">
+          {sitting
+            ? "Grab a drink — you're back in the next one."
+            : `Round ${round.number} was already dealt when you joined — warm up, you're on next.`}
+        </p>
       </Card>
     );
   }

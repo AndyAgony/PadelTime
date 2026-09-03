@@ -165,11 +165,17 @@ sessionRoutes.post("/sessions/:id/status", async (c) => {
       await setStatus("complete");
       return c.json({ ok: true });
     }
+    case "pause":
     case "back_to_checkin": {
-      // Only once the board is empty — undoing rounds is the way to get there.
+      // Pausing drops back to check-in with every round and the standings kept:
+      // late arrivals join with the link, drop-outs leave, and "Resume" deals the
+      // next round with whoever is checked in. Only between rounds — a round
+      // with scores still missing has players on court.
       if (session.status !== "active") return c.json({ error: "Session isn't live" }, 400);
-      if ((await loadRounds(db, session.id)).length > 0) {
-        return c.json({ error: "Undo the rounds first" }, 400);
+      const played = await loadRounds(db, session.id);
+      const latest = played[played.length - 1];
+      if (latest && !latest.complete) {
+        return c.json({ error: `Enter all of round ${latest.number}'s scores first` }, 400);
       }
       await setStatus("checkin");
       return c.json({ ok: true });

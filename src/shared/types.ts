@@ -144,6 +144,7 @@ export interface JoinInfo {
   pointsPerMatch: number;
   confirmedCount: number;
   waitlistCount: number;
+  roundsPlayed: number;
   myStatus: PlayerStatus | null;
 }
 

@@ -3,29 +3,30 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { authClient } from "../lib/auth";
 import { Api, useLoad } from "../lib/api";
 import { fmtTimeRange } from "../lib/format";
-import { Button, Card, ErrorNote, InfoRow, PageSpinner, ProgressBar, StatCell } from "../components/ui";
+import { Badge, Button, Card, ErrorNote, InfoRow, PageSpinner, ProgressBar, StatCell } from "../components/ui";
 import { Logo } from "../App";
+import { statusTone } from "./Home";
 
 export function JoinPage() {
   const { code = "" } = useParams();
   const { data: session, isPending } = authClient.useSession();
   const { data, error, loading, reload } = useLoad(() => Api.joinInfo(code), [code]);
   const [joinErr, setJoinErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const navigate = useNavigate();
 
   if (loading || isPending) return <PageSpinner />;
 
-  const join = async () => {
-    setBusy(true);
+  const act = async (key: string, fn: () => Promise<unknown>) => {
+    setBusy(key);
     setJoinErr(null);
     try {
-      await Api.join(code);
+      await fn();
       reload();
     } catch (e) {
       setJoinErr((e as Error).message);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
@@ -42,9 +43,32 @@ export function JoinPage() {
   const spotsLeft = Math.max(0, data.maxPlayers - data.confirmedCount);
   const joined = !!data.myStatus && data.myStatus !== "dropped";
   const over = ["complete", "cancelled"].includes(data.status);
+  const live = data.status === "active";
+  const paused = data.status === "checkin" && data.roundsPlayed > 0;
+  // While the game is on (check-in or live) joining can check you in on the spot.
+  const playing = data.status === "checkin" || live;
+  const nextRound = data.roundsPlayed + 1;
+
+  const stageLabel = live
+    ? `Live · round ${data.roundsPlayed}`
+    : paused
+      ? `Paused after ${data.roundsPlayed} round${data.roundsPlayed === 1 ? "" : "s"}`
+      : data.status === "checkin"
+        ? "Checking in now"
+        : data.status === "open"
+          ? "Open for signup"
+          : data.status === "draft"
+            ? "Not open yet"
+            : data.status === "complete"
+              ? "Finished"
+              : "Cancelled";
+
+  const join = (here: boolean) => act(here ? "here" : "join", () => Api.join(code, { here }));
+  const checkIn = () => act("here", () => Api.selfCheckin(data.sessionId));
+  const openSession = () => navigate(`/app/sessions/${data.sessionId}`);
 
   return (
-    <div className="min-h-dvh bg-canvas pb-28">
+    <div className="min-h-dvh bg-canvas pb-32">
       <div className="mx-auto max-w-lg">
         <div className="court-banner relative h-40 sm:rounded-b-3xl">
           <div className="absolute left-4 top-4">
@@ -55,7 +79,10 @@ export function JoinPage() {
         </div>
         <div className="px-3">
           <Card className="relative -mt-14 shadow-lg">
-            <p className="text-xs font-bold uppercase tracking-widest text-muted">You're invited</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted">You're invited</p>
+              <Badge tone={statusTone(data.status)}>{stageLabel}</Badge>
+            </div>
             <h1 className="mt-1 text-2xl font-black leading-tight text-navy">{data.name}</h1>
             <p className="mt-1 text-sm text-muted">{fmtTimeRange(data.startsAt, data.durationMin)}</p>
             {data.venue && <p className="text-sm text-muted">📍 {data.venue}</p>}
@@ -65,6 +92,17 @@ export function JoinPage() {
               <StatCell label="Courts" value={data.courts} />
             </div>
           </Card>
+
+          {playing && !joined && !over && (
+            <Card className="mt-4 border-royal/30 bg-royal-soft/40">
+              <p className="font-black text-navy">{live ? "The game is already on — jump in." : paused ? "The game is paused between rounds." : "Check-in is happening now."}</p>
+              <p className="mt-1 text-sm text-ink">
+                {live
+                  ? `Round ${data.roundsPlayed} is on court. Join now and you're dealt in from round ${nextRound} — the organizer sees you straight away.`
+                  : `Join now and you're dealt in from round ${nextRound}.`}
+              </p>
+            </Card>
+          )}
 
           <Card className="mt-4">
             <div className="flex items-center justify-between">
@@ -84,7 +122,7 @@ export function JoinPage() {
             <h3 className="mb-1 text-lg font-black text-navy">How it works</h3>
             <div className="divide-y divide-line">
               <InfoRow icon="🔄">New partner every round — Americano</InfoRow>
-              <InfoRow icon="🎯">Matches to {data.pointsPerMatch} rally points, you score individually</InfoRow>
+              <InfoRow icon="🎯">One game to {data.pointsPerMatch} rally points; every point you win counts for you</InfoRow>
               <InfoRow icon="📱">Enter and confirm scores from your phone; live leaderboard</InfoRow>
               <InfoRow icon="🔑">No password — a one-time code by email</InfoRow>
             </div>
@@ -100,21 +138,48 @@ export function JoinPage() {
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 p-4 backdrop-blur">
         <div className="mx-auto max-w-lg">
           {joined ? (
-            <div className="flex items-center gap-3">
-              <div className="min-w-0 flex-1 text-sm font-semibold">
-                {data.myStatus === "waitlist" ? (
-                  <span className="text-amber-dark">You're on the waitlist — hang tight.</span>
-                ) : (
-                  <span className="text-navy">You're in ✓</span>
-                )}
+            data.myStatus === "waitlist" ? (
+              <div className="flex items-center gap-3">
+                <p className="min-w-0 flex-1 text-sm font-semibold text-amber-dark">You're on the waitlist — hang tight.</p>
+                <Button size="lg" onClick={openSession}>
+                  Open session
+                </Button>
               </div>
-              <Button size="lg" onClick={() => navigate(`/app/sessions/${data.sessionId}`)}>
-                Open session
+            ) : playing && data.myStatus === "confirmed" ? (
+              <div>
+                <p className="mb-2 text-sm font-semibold text-navy">You're in ✓ — check in when you're at the courts.</p>
+                <div className="flex gap-2">
+                  <Button className="flex-1" size="lg" busy={busy === "here"} onClick={checkIn}>
+                    ✓ I'm here
+                  </Button>
+                  <Button variant="secondary" size="lg" onClick={openSession}>
+                    Open session
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <p className="min-w-0 flex-1 text-sm font-semibold text-navy">
+                  {data.myStatus === "checked_in" && live ? "You're in ✓ — dealt in from the next round." : "You're in ✓"}
+                </p>
+                <Button size="lg" onClick={openSession}>
+                  Open session
+                </Button>
+              </div>
+            )
+          ) : data.status === "complete" ? (
+            <Link to={`/board/${code}`} className="block">
+              <Button className="w-full" size="lg">
+                🏆 See the final standings
               </Button>
-            </div>
+            </Link>
           ) : over ? (
             <Button className="w-full" size="lg" disabled>
-              {data.status === "complete" ? "Session finished" : "Session cancelled"}
+              Session cancelled
+            </Button>
+          ) : data.status === "draft" ? (
+            <Button className="w-full" size="lg" disabled>
+              Signup hasn't opened yet
             </Button>
           ) : !session ? (
             <Link to={`/login?next=${encodeURIComponent(`/join/${code}`)}`} className="block">
@@ -122,9 +187,18 @@ export function JoinPage() {
                 Continue with email →
               </Button>
             </Link>
+          ) : playing && spotsLeft > 0 ? (
+            <div className="flex gap-2">
+              <Button className="flex-1" size="lg" busy={busy === "here"} onClick={() => join(true)}>
+                ✓ I'm here — deal me in
+              </Button>
+              <Button variant="secondary" size="lg" busy={busy === "join"} onClick={() => join(false)}>
+                On my way
+              </Button>
+            </div>
           ) : (
-            <Button className="w-full" size="lg" busy={busy} onClick={join}>
-              {data.status === "active" ? "Ask the organizer to add you" : spotsLeft > 0 ? "Join session" : "Join waitlist"}
+            <Button className="w-full" size="lg" busy={busy === "join"} onClick={() => join(false)}>
+              {spotsLeft > 0 ? "Join session" : "Join waitlist"}
             </Button>
           )}
         </div>

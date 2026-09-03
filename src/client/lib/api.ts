@@ -77,7 +77,7 @@ export const Api = {
   disputeScore: (matchId: string) => req(`/matches/${matchId}/dispute`, post({})),
 
   joinInfo: (code: string) => req<JoinInfo>(`/join/${code}`),
-  join: (code: string) => req<{ status: PlayerStatus }>(`/join/${code}`, post({})),
+  join: (code: string, opts: { here?: boolean } = {}) => req<{ status: PlayerStatus }>(`/join/${code}`, post(opts)),
   board: (code: string) => req<BoardData>(`/board/${code}`),
 };
 

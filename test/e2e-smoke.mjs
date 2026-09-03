@@ -172,10 +172,40 @@ if (standingsRows !== 8) fail(`expected 8 standings rows, saw ${standingsRows}`)
 log("standings show all 8 players");
 await shot(org, "08-standings-r1");
 
-// --- Round 2, then finish ---------------------------------------------------
-await org.getByRole("button", { name: "Next round →" }).click();
+// --- Late arrival joins while the game is live -------------------------------
+const lateCtx = await browser.newContext({ ...contextOpts, viewport: { width: 390, height: 844 } });
+const late = await lateCtx.newPage();
+await late.goto(`${BASE}/join/${code}`);
+await late.getByText("The game is already on").waitFor({ timeout: 10000 });
+await late.getByRole("button", { name: "Continue with email →" }).click();
+await late.waitForURL("**/login**");
+await otpSignIn(late, "Late", `late${run}@test.com`);
+await late.waitForURL("**/join/**", { timeout: 15000 });
+await late.getByRole("button", { name: /I'm here — deal me in/ }).click({ timeout: 15000 });
+await late.getByText("dealt in from the next round").waitFor({ timeout: 10000 });
+await late.getByRole("button", { name: "Open session" }).click();
+await late.waitForURL("**/app/sessions/**");
+await late.getByText("You're in from round 2").waitFor({ timeout: 10000 });
+log("late arrival joined via link while live → checked in, dealt in from round 2");
+await shot(late, "08b-late-joiner");
+
+// --- Pause between rounds, then resume into round 2 --------------------------
+await org.getByRole("button", { name: /Pause game/ }).click();
+await org.getByText("Game paused").waitFor({ timeout: 10000 });
+await org.getByText("Standings so far").waitFor();
+if ((await org.locator("table tbody tr").count()) < 8) fail("paused view should keep the standings");
+await shot(org, "08c-paused");
+await org.getByRole("button", { name: /Resume · round 2/ }).click();
 await org.getByText("Round 2").first().waitFor({ timeout: 15000 });
-log("round 2 generated");
+log("pause → check-in with standings kept → resume deals round 2");
+await late.waitForTimeout(4500); // next poll
+await late.getByText(/Round 2 · your match|sitting round 2 out/).first().waitFor({ timeout: 10000 });
+log("late arrival is part of round 2 (9 players: 8 on court, 1 sitting)");
+
+// --- Round 3, then finish ---------------------------------------------------
+await org.getByRole("button", { name: "Next round →" }).click();
+await org.getByText("Round 3").first().waitFor({ timeout: 15000 });
+log("round 3 generated");
 
 await org.getByRole("button", { name: "Finish session" }).click();
 await org.getByText("Final result").waitFor({ timeout: 15000 });
@@ -241,9 +271,9 @@ await shot(org, "13-empty-board");
 await org.getByRole("button", { name: /Start round 1/ }).click();
 await org.getByText("Round 1").first().waitFor({ timeout: 15000 });
 await org.getByRole("button", { name: "Undo round" }).click();
-await org.getByRole("button", { name: "← Back to check-in" }).click();
+await org.getByRole("button", { name: /Pause game/ }).click();
 await org.getByText("Only checked-in players").waitFor({ timeout: 10000 });
-log("empty board recovers: deal round 1 again / back to check-in");
+log("empty board recovers: start round 1 again / pause back to check-in");
 
 await browser.close();
 console.log("\nE2E SMOKE: ALL PASSED ✅");

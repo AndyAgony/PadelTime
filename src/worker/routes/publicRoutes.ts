@@ -54,12 +54,15 @@ publicRoutes.get("/join/:code", async (c) => {
     pointsPerMatch: session.pointsPerMatch,
     confirmedCount: players.filter((p) => p.status === "confirmed" || p.status === "checked_in").length,
     waitlistCount: players.filter((p) => p.status === "waitlist").length,
+    roundsPlayed: (await loadRounds(db, session.id)).length,
     myStatus: (mine?.status as PlayerStatus) ?? null,
   };
   return c.json(info);
 });
 
-// Join via invite link → confirmed, or waitlist when full (plan §8).
+// Join via invite link → confirmed, or waitlist when full (plan §8). The link
+// keeps working once the game is on: late arrivals join themselves and are
+// dealt in from the next round. `here: true` checks them in on the spot.
 publicRoutes.post("/join/:code", async (c) => {
   const u = c.get("user");
   if (!u) return c.json({ error: "Sign in required" }, 401);
@@ -67,31 +70,37 @@ publicRoutes.post("/join/:code", async (c) => {
   const loaded = await loadSessionByCode(db, c.req.param("code"));
   if (!loaded) return c.json({ error: "That invite link doesn't exist" }, 404);
   const { session } = loaded;
-  if (!["open", "checkin"].includes(session.status)) {
-    const msg =
-      session.status === "draft"
-        ? "Signup hasn't opened yet — check back soon"
-        : session.status === "active"
-          ? "This session already started — ask the organizer to add you"
-          : "This session is over";
+  if (!["open", "checkin", "active"].includes(session.status)) {
+    const msg = session.status === "draft" ? "Signup hasn't opened yet — check back soon" : "This session is over";
     return c.json({ error: msg }, 400);
   }
+  const body = await c.req.json().catch(() => ({}));
+  const playing = ["checkin", "active"].includes(session.status);
+  const here = playing && body.here === true;
 
   const players = await db
     .select()
     .from(sessionPlayers)
     .where(eq(sessionPlayers.sessionId, session.id));
   const taken = players.filter((p) => p.status === "confirmed" || p.status === "checked_in").length;
-  const target: PlayerStatus = taken < session.maxPlayers ? "confirmed" : "waitlist";
+  const target: PlayerStatus = taken >= session.maxPlayers ? "waitlist" : here ? "checked_in" : "confirmed";
+  const checkedInAt = target === "checked_in" ? now() : null;
 
   const existing = players.find((p) => p.userId === u.id);
   if (existing) {
     if (existing.status === "dropped") {
       await db
         .update(sessionPlayers)
-        .set({ status: target, joinedAt: now() })
+        .set({ status: target, joinedAt: now(), checkedInAt })
         .where(eq(sessionPlayers.id, existing.id));
       return c.json({ status: target });
+    }
+    if (existing.status === "confirmed" && here) {
+      await db
+        .update(sessionPlayers)
+        .set({ status: "checked_in", checkedInAt: now() })
+        .where(eq(sessionPlayers.id, existing.id));
+      return c.json({ status: "checked_in" });
     }
     return c.json({ status: existing.status });
   }
@@ -103,7 +112,7 @@ publicRoutes.post("/join/:code", async (c) => {
     guestName: null,
     status: target,
     joinedAt: now(),
-    checkedInAt: null,
+    checkedInAt,
   });
 
   // Joining a session makes you part of its group (recurring-group model, plan §18).
