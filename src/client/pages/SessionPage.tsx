@@ -311,6 +311,11 @@ function RulesCard({ d }: { d: SessionDetail }) {
   const [open, setOpen] = useState(["draft", "open", "checkin"].includes(d.status));
   const est = estimateRounds(d.durationMin, d.pointsPerMatch);
   const half = Math.ceil(d.pointsPerMatch / 2);
+  // Example finishing scores for this points setting, e.g. 14–10, 16–8, even 12–12 for 24.
+  const n = d.pointsPerMatch;
+  const lo = Math.floor(n / 2);
+  const examples = [2, 4].filter((k) => lo - k >= 0).map((k) => `${n - lo + k}–${lo - k}`);
+  const lastExample = n % 2 === 0 ? `even ${lo}–${lo}` : `or ${n - lo}–${lo}`;
   return (
     <Card className={cls("transition-colors", !open && "hover:border-line-strong")}>
       <button
@@ -345,14 +350,11 @@ function RulesCard({ d }: { d: SessionDetail }) {
 
           <RuleGroup label="Scoring">
             <InfoRow icon="🎯">
-              Each match is one game to <b>{d.pointsPerMatch} total rally points</b> (e.g. 14–10). Every point counts,
-              no deuce, no advantage.
+              <b>One game to {n} total rally points.</b> Every rally scores a point — no deuce, no advantage.
             </InfoRow>
-            <InfoRow icon="🧮">
-              <b>You score as an individual</b> — both players on a team bank the team's points.
-            </InfoRow>
-            <InfoRow icon="✅">
-              Players enter the score, the other team confirms it. The organizer can always correct it.
+            <InfoRow icon="🔢">
+              <b>The two scores always add up to {n}</b> — {[...examples, lastExample].join(", ")} all end the match.
+              Every match is exactly {n} rallies, so the courts finish around the same time.
             </InfoRow>
           </RuleGroup>
 
