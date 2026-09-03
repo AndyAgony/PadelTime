@@ -208,11 +208,11 @@ function Hero({ d, isOrganizer, onSettings }: { d: SessionDetail; isOrganizer: b
             <button
               type="button"
               aria-label="Settings"
-              title="Session settings"
+              title="Session settings — style, courts, points, time"
               onClick={onSettings}
-              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-canvas text-lg font-bold text-navy hover:bg-line"
+              className="flex h-8 shrink-0 items-center gap-1 rounded-full bg-canvas px-3 text-xs font-bold text-navy hover:bg-line"
             >
-              ⋯
+              ⚙ Settings
             </button>
           )}
         </div>
