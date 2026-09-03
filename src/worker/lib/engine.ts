@@ -38,11 +38,18 @@ export async function generateNextRound(
 
   const history = buildHistory(played);
   const pointsByPlayer: Record<string, number> = {};
+  const againstByPlayer: Record<string, number> = {};
   for (const r of played) {
     for (const m of r.matches) {
       if (m.status !== "confirmed" || m.scoreA == null || m.scoreB == null) continue;
-      for (const id of m.a) pointsByPlayer[id] = (pointsByPlayer[id] ?? 0) + m.scoreA;
-      for (const id of m.b) pointsByPlayer[id] = (pointsByPlayer[id] ?? 0) + m.scoreB;
+      for (const id of m.a) {
+        pointsByPlayer[id] = (pointsByPlayer[id] ?? 0) + m.scoreA;
+        againstByPlayer[id] = (againstByPlayer[id] ?? 0) + m.scoreB;
+      }
+      for (const id of m.b) {
+        pointsByPlayer[id] = (pointsByPlayer[id] ?? 0) + m.scoreB;
+        againstByPlayer[id] = (againstByPlayer[id] ?? 0) + m.scoreA;
+      }
     }
   }
 
@@ -52,8 +59,8 @@ export async function generateNextRound(
     roundNumber: (latest?.number ?? 0) + 1,
     ...history,
     standings: Object.entries(pointsByPlayer)
-      .map(([playerId, points]) => ({ playerId, points }))
-      .sort((a, b) => b.points - a.points),
+      .map(([playerId, points]) => ({ playerId, points, diff: points - (againstByPlayer[playerId] ?? 0) }))
+      .sort((a, b) => b.points - a.points || (b.diff ?? 0) - (a.diff ?? 0)),
     rng: Math.random,
   };
 

@@ -4,6 +4,7 @@ import { gameSessions, rounds, sessionPlayers } from "../db/schema";
 import type { DB, SessionRow } from "../lib/detail";
 import { buildDetail, isGroupMember, isGroupOrganizer, loadRounds, loadSession } from "../lib/detail";
 import { generateNextRound } from "../lib/engine";
+import { getFormat } from "../../shared/formats/registry";
 import { asInt, newId, now, trimmed } from "../lib/util";
 import type { ApiCtx, AuthedUser } from "./context";
 
@@ -71,6 +72,13 @@ sessionRoutes.patch("/sessions/:id", async (c) => {
   }
   const courts = asInt(body.courts);
   if (courts != null) patch.courts = Math.min(Math.max(courts, 1), 12);
+  // Casual ↔ competitive can flip any time before the session is over; the
+  // next round dealt uses the new strategy.
+  if (typeof body.format === "string" && !["complete", "cancelled"].includes(session.status)) {
+    const format = getFormat(body.format);
+    if (!format) return c.json({ error: `Unknown format "${body.format}"` }, 400);
+    patch.format = format.key;
+  }
 
   const preActive = ["draft", "open", "checkin"].includes(session.status);
   if (preActive) {

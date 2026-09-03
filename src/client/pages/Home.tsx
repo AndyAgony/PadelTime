@@ -3,7 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { Api, useLoad } from "../lib/api";
 import { dateParts, firstName, fmtTimeRange, fromLocalInputValue } from "../lib/format";
 import { SESSION_STATUS_LABEL } from "../../shared/types";
-import type { SessionStatus, SessionSummary } from "../../shared/types";
+import type { FormatKey, SessionStatus, SessionSummary } from "../../shared/types";
+import { StylePicker } from "../components/StylePicker";
 import { Badge, Button, Card, EmptyState, ErrorNote, Field, Input, Modal, PageSpinner, ProgressBar, cls } from "../components/ui";
 
 export const statusTone = (s: SessionStatus) =>
@@ -147,6 +148,7 @@ export function NewSessionModal({
     maxPlayers: 12,
     pointsPerMatch: 24,
     copyPlayersFrom: "",
+    format: "americano" as FormatKey,
   });
   const num = (v: string, fallback: number) => {
     const n = parseInt(v, 10);
@@ -166,7 +168,7 @@ export function NewSessionModal({
         courts: form.courts,
         maxPlayers: form.maxPlayers,
         pointsPerMatch: form.pointsPerMatch,
-        format: "americano",
+        format: form.format,
         copyPlayersFrom: form.copyPlayersFrom || null,
       });
       onClose();
@@ -183,6 +185,7 @@ export function NewSessionModal({
         <Field label="Name">
           <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Thursday Padel Jam" autoFocus />
         </Field>
+        <StylePicker value={form.format} onChange={(format) => setForm({ ...form, format })} hint="You can switch styles later — even mid-session." />
         <div className="grid grid-cols-[1fr_auto] gap-3">
           <Field label="When">
             <Input type="datetime-local" value={form.when} onChange={(e) => setForm({ ...form, when: e.target.value })} />
@@ -229,9 +232,6 @@ export function NewSessionModal({
             </select>
           </Field>
         )}
-        <p className="text-xs text-muted">
-          Format: <span className="font-bold text-navy">Americano</span> — rotating partners, every point counts individually.
-        </p>
         <ErrorNote message={err} />
         <Button className="w-full" size="lg" busy={busy} type="submit">
           Create session

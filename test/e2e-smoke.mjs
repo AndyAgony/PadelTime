@@ -238,12 +238,15 @@ await org.goto(`${BASE}/app`);
 await org.getByText("Past sessions").waitFor({ timeout: 10000 });
 await org.getByRole("button", { name: "+ New session" }).click();
 await org.getByPlaceholder("Thursday Padel Jam").fill("Bring Back Night");
+await org.getByRole("button", { name: /Competitive/ }).click(); // Mexicano
 await org.locator("select").selectOption({ index: 1 });
 await org.getByRole("button", { name: "Create session", exact: true }).click();
 await org.waitForURL("**/app/sessions/**");
 await org.getByText("George").first().waitFor({ timeout: 10000 });
 if ((await org.locator("ul > li").count()) < 8) fail("copied roster should have 8 players");
-log("bring back players: new session pre-loaded with previous roster");
+await org.getByText("Mexicano").first().waitFor();
+await org.getByText("Round 1 is a random draw").waitFor();
+log("bring back players: new competitive (Mexicano) session pre-loaded with previous roster");
 await org.goto(`${BASE}/app`);
 await org.getByRole("button", { name: "+ New session" }).click();
 await org.getByPlaceholder("Thursday Padel Jam").fill("Quick Start Night");

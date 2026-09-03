@@ -145,6 +145,7 @@ publicRoutes.get("/board/:code", async (c) => {
     name: session.name,
     groupName,
     status: session.status as SessionStatus,
+    format: session.format as BoardData["format"],
     pointsPerMatch: session.pointsPerMatch,
     players: players.map((p) => ({ id: p.id, name: p.name })),
     rounds,

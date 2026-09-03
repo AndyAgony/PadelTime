@@ -3,7 +3,7 @@
 export type SessionStatus = "draft" | "open" | "checkin" | "active" | "complete" | "cancelled";
 export type PlayerStatus = "confirmed" | "waitlist" | "checked_in" | "dropped";
 export type MatchStatus = "pending" | "submitted" | "disputed" | "confirmed";
-export type FormatKey = "americano";
+export type FormatKey = "americano" | "mexicano";
 export type GroupRole = "organizer" | "member";
 
 export interface UserInfo {
@@ -153,6 +153,7 @@ export interface BoardData {
   name: string;
   groupName: string;
   status: SessionStatus;
+  format: FormatKey;
   pointsPerMatch: number;
   players: { id: string; name: string }[];
   rounds: RoundRow[];

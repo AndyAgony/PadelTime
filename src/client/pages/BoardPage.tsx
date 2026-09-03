@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { Api, usePoll } from "../lib/api";
 import { StandingsTable } from "../components/StandingsTable";
 import { Avatar, Badge, PageSpinner, cls } from "../components/ui";
+import { formatMeta } from "../../shared/formatMeta";
 
 // TV / court display (plan §16): read-only, huge type, auto-refreshing.
 export function BoardPage() {
@@ -27,7 +28,7 @@ export function BoardPage() {
       <div className="mx-auto max-w-6xl">
         <header className="mb-8 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-sm font-bold uppercase tracking-widest text-muted">🎾 PadelTime · Americano</p>
+            <p className="text-sm font-bold uppercase tracking-widest text-muted">🎾 PadelTime · {formatMeta(data.format).name}</p>
             <h1 className="text-4xl font-black tracking-tight text-navy sm:text-5xl">{data.name}</h1>
           </div>
           <div className="flex items-center gap-3">

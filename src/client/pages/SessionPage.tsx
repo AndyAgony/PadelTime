@@ -26,6 +26,8 @@ import {
 import { ScoreEntry } from "../components/ScoreEntry";
 import { StandingsTable, rankStyle } from "../components/StandingsTable";
 import { statusTone } from "./Home";
+import { StylePicker } from "../components/StylePicker";
+import { FORMAT_META, formatMeta } from "../../shared/formatMeta";
 
 type Run = (key: string, fn: () => Promise<unknown>) => Promise<void>;
 type ViewProps = { d: SessionDetail; isOrganizer: boolean; run: Run; busyKey: string | null };
@@ -218,7 +220,7 @@ function Hero({ d, isOrganizer, onSettings }: { d: SessionDetail; isOrganizer: b
         <p className="mt-1 text-sm text-muted">{fmtTimeRange(d.startsAt, d.durationMin)}</p>
         {d.venue && <p className="text-sm text-muted">📍 {d.venue}</p>}
         <div className="mt-4 grid grid-cols-[1.5fr_1fr_1fr_1fr] gap-2 border-t border-line pt-4">
-          <StatCell label="Format" value="Americano" />
+          <StatCell label="Format" value={formatMeta(d.format).name} />
           <StatCell label="Points" value={d.pointsPerMatch} />
           <StatCell label="Courts" value={d.courts} />
           <StatCell label="Time" value={d.durationMin ? `${d.durationMin}m` : "—"} />
@@ -329,7 +331,7 @@ function RulesCard({ d }: { d: SessionDetail }) {
       >
         <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-canvas text-xl">📜</span>
         <span className="min-w-0 flex-1">
-          <span className="block text-base font-black leading-tight text-navy">The rules of Americano tournament</span>
+          <span className="block text-base font-black leading-tight text-navy">The rules of {formatMeta(d.format).name} tournament</span>
           <span className="mt-0.5 block truncate text-xs text-muted">
             {open ? "Format · scoring · serving · winning" : "Tap to read how the night works"}
           </span>
@@ -341,10 +343,23 @@ function RulesCard({ d }: { d: SessionDetail }) {
       {open && (
         <div className="mt-3 border-t border-line">
           <RuleGroup label="Format">
-            <InfoRow icon="🔄">
-              <b>New partner every round.</b> Pairings rotate for maximum variety — it's you against the field, not
-              fixed teams.
-            </InfoRow>
+            {d.format === "mexicano" ? (
+              <>
+                <InfoRow icon="🎲">
+                  <b>Round 1 is a random draw.</b> Then the standings deal the courts: top four on court 1, next four on
+                  court 2, and so on.
+                </InfoRow>
+                <InfoRow icon="🏆">
+                  <b>Play your level.</b> On each court it's 1st & 4th vs 2nd & 3rd, so matches stay close. Win and you
+                  move up; lose and you drop a court.
+                </InfoRow>
+              </>
+            ) : (
+              <InfoRow icon="🔄">
+                <b>New partner every round.</b> Pairings rotate for maximum variety — it's you against the field, not
+                fixed teams.
+              </InfoRow>
+            )}
             <InfoRow icon="🏟️">
               {d.courts} court{d.courts === 1 ? "" : "s"} per round. Extra players sit out, and sit-outs rotate so
               everyone rests about equally.
@@ -418,6 +433,7 @@ function SettingsModal({
     courts: d.courts,
     maxPlayers: d.maxPlayers,
     pointsPerMatch: d.pointsPerMatch,
+    format: d.format,
   });
   const preActive = ["draft", "open", "checkin"].includes(d.status);
   const num = (v: string, fallback: number) => {
@@ -430,6 +446,13 @@ function SettingsModal({
         <Field label="Name">
           <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </Field>
+        {d.status !== "complete" && (
+          <StylePicker
+            value={form.format}
+            onChange={(format) => setForm({ ...form, format })}
+            hint={d.rounds.length > 0 ? "A change applies from the next round dealt." : undefined}
+          />
+        )}
         <div className="grid grid-cols-[1fr_auto] gap-3">
           <Field label="When">
             <Input type="datetime-local" value={form.when} onChange={(e) => setForm({ ...form, when: e.target.value })} />
@@ -474,6 +497,7 @@ function SettingsModal({
                 courts: form.courts,
                 maxPlayers: form.maxPlayers,
                 pointsPerMatch: form.pointsPerMatch,
+                format: form.format,
               });
               onClose();
             })
@@ -954,6 +978,9 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
             title={
               <>
                 Round {current.number}
+                {d.format === "mexicano" && current.number > 1 && (
+                  <span className="ml-1.5 text-sm font-semibold text-muted">· courts by standings</span>
+                )}
                 {est && (
                   <span className="ml-1.5 text-sm font-semibold text-muted">
                     {current.number <= est ? `of ~${est}` : "· extra time"}
@@ -1046,6 +1073,19 @@ function ActiveView({ d, isOrganizer, run, busyKey }: ViewProps) {
               Manage players ↓
             </Button>
           </div>
+          <p className="mt-3 text-xs text-muted">
+            {formatMeta(d.format).emoji} <b className="text-navy">{formatMeta(d.format).style}</b> style ·{" "}
+            {formatMeta(d.format).name}: {formatMeta(d.format).blurb}{" "}
+            <button
+              type="button"
+              className="font-bold text-royal hover:underline"
+              disabled={busyKey === "style"}
+              onClick={() => run("style", () => Api.updateSession(d.id, { format: d.format === "mexicano" ? "americano" : "mexicano" }))}
+            >
+              Switch to {FORMAT_META[d.format === "mexicano" ? "americano" : "mexicano"].style.toLowerCase()} →
+            </button>{" "}
+            (applies from the next round).
+          </p>
           <p className="mt-2 text-xs text-muted">
             Put the TV board on a courtside iPad or TV — it refreshes itself with courts, scores and the leaderboard.
             Late arrivals can join with the invite link at any time; player changes apply from the next round. Pause

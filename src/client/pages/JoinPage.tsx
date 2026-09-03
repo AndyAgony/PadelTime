@@ -6,6 +6,7 @@ import { fmtTimeRange } from "../lib/format";
 import { Badge, Button, Card, ErrorNote, InfoRow, PageSpinner, ProgressBar, StatCell } from "../components/ui";
 import { Logo } from "../App";
 import { statusTone } from "./Home";
+import { formatMeta } from "../../shared/formatMeta";
 
 export function JoinPage() {
   const { code = "" } = useParams();
@@ -87,7 +88,7 @@ export function JoinPage() {
             <p className="mt-1 text-sm text-muted">{fmtTimeRange(data.startsAt, data.durationMin)}</p>
             {data.venue && <p className="text-sm text-muted">📍 {data.venue}</p>}
             <div className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-4">
-              <StatCell label="Format" value="Americano" />
+              <StatCell label="Format" value={formatMeta(data.format).name} />
               <StatCell label="Points" value={data.pointsPerMatch} />
               <StatCell label="Courts" value={data.courts} />
             </div>
@@ -121,7 +122,9 @@ export function JoinPage() {
           <Card className="mt-4">
             <h3 className="mb-1 text-lg font-black text-navy">How it works</h3>
             <div className="divide-y divide-line">
-              <InfoRow icon="🔄">New partner every round — Americano</InfoRow>
+              <InfoRow icon={formatMeta(data.format).emoji}>
+                <b>{formatMeta(data.format).name}</b> — {formatMeta(data.format).blurb}
+              </InfoRow>
               <InfoRow icon="🎯">One game to {data.pointsPerMatch} rally points; every point you win counts for you</InfoRow>
               <InfoRow icon="📱">Enter and confirm scores from your phone; live leaderboard</InfoRow>
               <InfoRow icon="🔑">No password — a one-time code by email</InfoRow>

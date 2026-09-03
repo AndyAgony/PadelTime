@@ -23,8 +23,8 @@ export interface EngineContext {
   byeCounts: Record<string, number>;
   /** Round number of each player's most recent bye (0 = never). */
   lastByeRound: Record<string, number>;
-  /** Current leaderboard (points desc) — used by ranked formats like Mexicano. */
-  standings: { playerId: string; points: number }[];
+  /** Current leaderboard (points desc, then point difference) — used by ranked formats like Mexicano. */
+  standings: { playerId: string; points: number; diff?: number }[];
   /** Random source, injectable for deterministic tests. */
   rng: () => number;
 }

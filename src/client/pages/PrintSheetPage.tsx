@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { americano } from "../../shared/formats/americano";
+import { formatMeta } from "../../shared/formatMeta";
 import { mulberry32 } from "../../shared/formats/types";
 import type { EngineContext } from "../../shared/formats/types";
 import { buildHistory } from "../../shared/history";
@@ -46,6 +47,7 @@ interface SheetData {
   courts: number;
   points: number;
   rounds: SheetRound[];
+  format: "americano" | "mexicano";
 }
 
 /** Plan rounds prior.length+1 … totalRounds, honouring everything already played. */
@@ -91,6 +93,7 @@ function anonymousSheet(players: number, courts: number, rounds: number, points:
     players: ids.map((id) => ({ number: Number(id), name: null })),
     courts,
     points,
+    format: "americano",
     rounds: planned.map((r) => ({
       number: r.number,
       byes: r.byes.map(Number).sort((a, b) => a - b),
@@ -103,6 +106,19 @@ function anonymousSheet(players: number, courts: number, rounds: number, points:
       })),
     })),
   };
+}
+
+/** Mexicano deals courts from the standings, so future rounds can't be pre-planned: print blank courts to fill in. */
+function blankRounds(from: number, to: number, courts: number): SheetRound[] {
+  const out: SheetRound[] = [];
+  for (let r = from; r <= to; r++) {
+    out.push({
+      number: r,
+      byes: [],
+      matches: Array.from({ length: courts }, (_, i) => ({ court: i + 1, a: [0, 0], b: [0, 0], scoreA: null, scoreB: null })),
+    });
+  }
+  return out;
 }
 
 function sessionSheet(d: SessionDetail, roundsWanted: number, seed: number): SheetData | { error: string } {
@@ -139,9 +155,13 @@ function sessionSheet(d: SessionDetail, roundsWanted: number, seed: number): She
     matches: r.matches.map((m) => ({ a: m.a, b: m.b })),
   }));
   const activeIds = roster.filter((p) => p.status !== "dropped").map((p) => p.id);
+  const totalRounds = Math.max(roundsWanted, existing.length);
   const planned: SheetRound[] =
-    activeIds.length >= 4
-      ? planRounds(activeIds, d.courts, Math.max(roundsWanted, existing.length), seed, prior).map((r) => ({
+    activeIds.length < 4
+      ? []
+      : d.format === "mexicano"
+        ? blankRounds(existing.length + 1, totalRounds, Math.min(d.courts, Math.floor(activeIds.length / 4)))
+        : planRounds(activeIds, d.courts, totalRounds, seed, prior).map((r) => ({
           number: r.number,
           byes: byNumber(r.byes),
           matches: r.matches.map((m, i) => ({
@@ -151,18 +171,18 @@ function sessionSheet(d: SessionDetail, roundsWanted: number, seed: number): She
             scoreA: null,
             scoreB: null,
           })),
-        }))
-      : [];
+        }));
 
   return {
     title: d.name,
-    subtitle: `${d.groupName} · Americano · ${roster.length} players · ${d.courts} court${d.courts === 1 ? "" : "s"}`,
+    subtitle: `${d.groupName} · ${formatMeta(d.format).name} · ${roster.length} players · ${d.courts} court${d.courts === 1 ? "" : "s"}`,
     when: d.startsAt ? fmtDateTime(d.startsAt) : null,
     venue: d.venue,
     players: roster.map((p, i) => ({ number: i + 1, name: p.name })),
     courts: d.courts,
     points: d.pointsPerMatch,
     rounds: [...existing, ...planned],
+    format: d.format,
   };
 }
 
@@ -342,13 +362,9 @@ export function PrintSheetPage() {
                             C{m.court}
                           </td>
                           <td className={cls("tabular text-center font-bold", dense ? "py-px text-[11px]" : "py-0.5 text-xs")}>
-                            <span className="font-normal text-zinc-500">#</span>{m.a[0]}{" "}
-                            <span className="font-normal text-zinc-400">&amp;</span>{" "}
-                            <span className="font-normal text-zinc-500">#</span>{m.a[1]}{" "}
-                            <span className="font-normal text-zinc-400">vs</span>{" "}
-                            <span className="font-normal text-zinc-500">#</span>{m.b[0]}{" "}
-                            <span className="font-normal text-zinc-400">&amp;</span>{" "}
-                            <span className="font-normal text-zinc-500">#</span>{m.b[1]}
+                            <Num n={m.a[0]} /> <span className="font-normal text-zinc-400">&amp;</span> <Num n={m.a[1]} />{" "}
+                            <span className="font-normal text-zinc-400">vs</span> <Num n={m.b[0]} />{" "}
+                            <span className="font-normal text-zinc-400">&amp;</span> <Num n={m.b[1]} />
                           </td>
                           <td className={cls("whitespace-nowrap pr-2 text-right", dense ? "py-px" : "py-0.5")}>
                             <ScoreBox value={m.scoreA} dense={dense} />
@@ -404,7 +420,14 @@ export function PrintSheetPage() {
             </table>
 
             <p className="mt-1.5 text-[9px] leading-tight text-zinc-500">
-              “—” = sitting that round out. Game to {sheet.points} total points, no deuce. <b>Serve changes every 4
+              “—” = sitting that round out. Game to {sheet.points} total points, no deuce.{" "}
+              {sheet.format === "mexicano" && (
+                <>
+                  <b>Mexicano:</b> after each round rank everyone by points — top four to court 1, next four to court 2,
+                  1st & 4th vs 2nd & 3rd. Fill the blank rounds in as you go.{" "}
+                </>
+              )}
+              <b>Serve changes every 4
               points</b> (teams alternate, each player serves 4 in a row); the first-listed pair serves first. Both partners
               write their team's score in their own row each round; highest total wins — padeltime.
             </p>
@@ -412,6 +435,17 @@ export function PrintSheetPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Player number, or a blank to write into (Mexicano rounds that aren't dealt yet). */
+function Num({ n }: { n: number }) {
+  if (!n) return <span className="inline-block w-5 border-b border-zinc-400 align-baseline">&nbsp;</span>;
+  return (
+    <>
+      <span className="font-normal text-zinc-500">#</span>
+      {n}
+    </>
   );
 }
 
