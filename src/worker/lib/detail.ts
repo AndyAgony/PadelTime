@@ -81,6 +81,7 @@ export async function loadPlayers(db: DB, sessionId: string): Promise<PlayerRow[
       byes: 0, // filled in after rounds load
       checkedInAt: sp.checkedInAt,
       joinedAt: sp.joinedAt,
+      level: sp.level ?? null,
     }))
     .sort((a, b) => a.joinedAt - b.joinedAt);
 }

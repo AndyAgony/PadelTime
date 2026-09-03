@@ -5,6 +5,7 @@ import type { DB, SessionRow } from "../lib/detail";
 import { buildDetail, isGroupMember, isGroupOrganizer, loadRounds, loadSession } from "../lib/detail";
 import { generateNextRound } from "../lib/engine";
 import { getFormat } from "../../shared/formats/registry";
+import { parseLevel } from "../../shared/levels";
 import { asInt, newId, now, trimmed } from "../lib/util";
 import type { ApiCtx, AuthedUser } from "./context";
 
@@ -279,9 +280,32 @@ sessionRoutes.patch("/sessions/:id/players/:pid", async (c) => {
       if (player.status !== "waitlist") return c.json({ error: "Player isn't waitlisted" }, 400);
       await db.update(sessionPlayers).set({ status: "confirmed" }).where(eq(sessionPlayers.id, player.id));
       break;
+    case "set_level":
+      await db.update(sessionPlayers).set({ level: parseLevel(body.level) }).where(eq(sessionPlayers.id, player.id));
+      break;
     default:
       return c.json({ error: "Unknown action" }, 400);
   }
+  return c.json({ ok: true });
+});
+
+// "I'm a beginner / intermediate / …" — players rate themselves; the organizer can override.
+sessionRoutes.post("/sessions/:id/level", async (c) => {
+  const u = c.get("user");
+  if (!u) return c.json({ error: "Sign in required" }, 401);
+  const db = c.get("db");
+  const loaded = await loadSession(db, c.req.param("id"));
+  if (!loaded) return c.json({ error: "Session not found" }, 404);
+  const { session } = loaded;
+  if (["complete", "cancelled"].includes(session.status)) return c.json({ error: "This session is over" }, 400);
+  const body = await c.req.json().catch(() => ({}));
+  const [me] = await db
+    .select()
+    .from(sessionPlayers)
+    .where(and(eq(sessionPlayers.sessionId, session.id), eq(sessionPlayers.userId, u.id)))
+    .limit(1);
+  if (!me) return c.json({ error: "Join the session first" }, 400);
+  await db.update(sessionPlayers).set({ level: parseLevel(body.level) }).where(eq(sessionPlayers.id, me.id));
   return c.json({ ok: true });
 });
 

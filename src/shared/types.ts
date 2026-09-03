@@ -70,6 +70,8 @@ export interface PlayerRow {
   byes: number;
   checkedInAt: number | null;
   joinedAt: number;
+  /** 1 newbie … 4 advanced, or null when not set. */
+  level: number | null;
 }
 
 export interface MatchRow {
@@ -146,6 +148,8 @@ export interface JoinInfo {
   waitlistCount: number;
   roundsPlayed: number;
   myStatus: PlayerStatus | null;
+  /** Level on this session, or the one remembered from the last session played. */
+  myLevel: number | null;
 }
 
 // Read-only public board (TV / court display) payload.

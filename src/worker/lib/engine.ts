@@ -26,6 +26,8 @@ export async function generateNextRound(
     .from(sessionPlayers)
     .where(eq(sessionPlayers.sessionId, session.id));
   const eligible = players.filter((p) => p.status === "checked_in").map((p) => p.id);
+  const levels: Record<string, number> = {};
+  for (const p of players) if (p.level != null) levels[p.id] = p.level;
   if (eligible.length < format.minPlayers) {
     return { error: `${format.name} needs at least ${format.minPlayers} checked-in players (currently ${eligible.length}).` };
   }
@@ -61,6 +63,7 @@ export async function generateNextRound(
     standings: Object.entries(pointsByPlayer)
       .map(([playerId, points]) => ({ playerId, points, diff: points - (againstByPlayer[playerId] ?? 0) }))
       .sort((a, b) => b.points - a.points || (b.diff ?? 0) - (a.diff ?? 0)),
+    levels,
     rng: Math.random,
   };
 

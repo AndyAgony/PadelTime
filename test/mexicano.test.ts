@@ -82,3 +82,27 @@ describe("mexicano round planning", () => {
     expect(plan.byes[0]).not.toBe("p5"); // p5 already sat out
   });
 });
+
+describe("mexicano seeded round 1", () => {
+  it("seeds round 1 from ability levels when set: advanced players on court 1", () => {
+    const players = names(8);
+    const levels = { p1: 1, p2: 4, p3: 2, p4: 4, p5: 3, p6: 4, p7: 3, p8: 2 };
+    const plan = mexicano.planRound({ ...ctxOf(players, 2, [], []), levels });
+    const top = courtOf(plan, 1);
+    const topIds = new Set([...top.a, ...top.b]);
+    // the three advanced players plus one intermediate
+    expect(topIds.has("p2") && topIds.has("p4") && topIds.has("p6")).toBe(true);
+    expect([...topIds].filter((id) => levels[id as keyof typeof levels] === 3)).toHaveLength(1);
+    // strongest + weakest on the court are partners
+    const teams = [top.a, top.b].map(team);
+    const inter = [...topIds].find((id) => levels[id as keyof typeof levels] === 3)!;
+    const partnerOfInter = [top.a, top.b].find((t) => t.includes(inter))!.find((id) => id !== inter)!;
+    expect(levels[partnerOfInter as keyof typeof levels]).toBe(4);
+    expect(teams).toHaveLength(2);
+  });
+
+  it("without levels round 1 is still a plain draw", () => {
+    const plan = mexicano.planRound(ctxOf(names(8), 2, [], []));
+    expect(plan.matches).toHaveLength(2);
+  });
+});

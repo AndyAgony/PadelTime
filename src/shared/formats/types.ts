@@ -25,6 +25,8 @@ export interface EngineContext {
   lastByeRound: Record<string, number>;
   /** Current leaderboard (points desc, then point difference) — used by ranked formats like Mexicano. */
   standings: { playerId: string; points: number; diff?: number }[];
+  /** Ability level per player id (1 newbie … 4 advanced); players without one are omitted. */
+  levels?: Record<string, number>;
   /** Random source, injectable for deterministic tests. */
   rng: () => number;
 }

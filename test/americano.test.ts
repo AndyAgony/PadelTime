@@ -202,3 +202,28 @@ describe("standings", () => {
     expect(standings.every((s) => s.ties === 1)).toBe(true);
   });
 });
+
+describe("americano level balancing", () => {
+  it("splits a court strong + weak vs strong + weak when levels are known", () => {
+    const players = ["a", "b", "c", "d"];
+    const levels = { a: 4, b: 4, c: 1, d: 1 };
+    const plan = americano.planRound({ ...makeCtx(players, 1, []), levels });
+    const m = plan.matches[0];
+    const sum = (t: [string, string]) => levels[t[0] as keyof typeof levels] + levels[t[1] as keyof typeof levels];
+    expect(sum(m.a)).toBe(5);
+    expect(sum(m.b)).toBe(5);
+  });
+
+  it("never lets balance override partner variety", () => {
+    const players = ["a", "b", "c", "d"];
+    const levels = { a: 4, b: 4, c: 1, d: 1 };
+    // Balanced pairs already played together twice → must rotate partners despite the level gap.
+    const history: HistoryRound[] = [
+      { number: 1, byes: [], matches: [{ a: ["a", "c"], b: ["b", "d"] }] },
+      { number: 2, byes: [], matches: [{ a: ["a", "d"], b: ["b", "c"] }] },
+    ];
+    const plan = americano.planRound({ ...makeCtx(players, 1, history), levels });
+    const m = plan.matches[0];
+    expect(new Set([[...m.a].sort().join("+"), [...m.b].sort().join("+")])).toEqual(new Set(["a+b", "c+d"]));
+  });
+});

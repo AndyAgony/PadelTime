@@ -1,5 +1,6 @@
 import type { EngineContext, FormatStrategy, PlannedMatch, RoundPlan } from "./types";
 import { pairKey, shuffle } from "./types";
+import { UNSET_LEVEL } from "../levels";
 
 // Americano:
 //  - rotating partners, fixed total points per match, individual cumulative scoring
@@ -16,6 +17,14 @@ import { pairKey, shuffle } from "./types";
 
 const PARTNER_WEIGHT = 40;
 const OPPONENT_WEIGHT = 3;
+// Level imbalance between the two teams (sum of levels). Deliberately below one
+// opponent repeat, so it only decides between otherwise-equal splits: strong +
+// weak vs strong + weak rather than the two strongest together.
+const BALANCE_WEIGHT = 1;
+
+function levelOf(id: string, ctx: EngineContext): number {
+  return ctx.levels?.[id] ?? UNSET_LEVEL;
+}
 
 function teamsCost(a: [string, string], b: [string, string], ctx: EngineContext): number {
   const pa = ctx.partnerCounts[pairKey(a[0], a[1])] ?? 0;
@@ -26,6 +35,10 @@ function teamsCost(a: [string, string], b: [string, string], ctx: EngineContext)
       const o = ctx.opponentCounts[pairKey(x, y)] ?? 0;
       cost += OPPONENT_WEIGHT * o * o;
     }
+  }
+  if (ctx.levels) {
+    const gap = Math.abs(levelOf(a[0], ctx) + levelOf(a[1], ctx) - levelOf(b[0], ctx) - levelOf(b[1], ctx));
+    cost += BALANCE_WEIGHT * gap;
   }
   return cost;
 }

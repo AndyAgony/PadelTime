@@ -27,6 +27,7 @@ import { ScoreEntry } from "../components/ScoreEntry";
 import { StandingsTable, rankStyle } from "../components/StandingsTable";
 import { statusTone } from "./Home";
 import { StylePicker } from "../components/StylePicker";
+import { LevelBadge, LevelSelect } from "../components/LevelSelect";
 import { FORMAT_META, formatMeta } from "../../shared/formatMeta";
 
 type Run = (key: string, fn: () => Promise<unknown>) => Promise<void>;
@@ -346,8 +347,8 @@ function RulesCard({ d }: { d: SessionDetail }) {
             {d.format === "mexicano" ? (
               <>
                 <InfoRow icon="🎲">
-                  <b>Round 1 is a random draw.</b> Then the standings deal the courts: top four on court 1, next four on
-                  court 2, and so on.
+                  <b>Round 1 is a random draw</b> — or seeded by ability when levels are set. Then the standings deal the
+                  courts: top four on court 1, next four on court 2, and so on.
                 </InfoRow>
                 <InfoRow icon="🏆">
                   <b>Play your level.</b> On each court it's 1st & 4th vs 2nd & 3rd, so matches stay close. Win and you
@@ -355,10 +356,17 @@ function RulesCard({ d }: { d: SessionDetail }) {
                 </InfoRow>
               </>
             ) : (
-              <InfoRow icon="🔄">
-                <b>New partner every round.</b> Pairings rotate for maximum variety — it's you against the field, not
-                fixed teams.
-              </InfoRow>
+              <>
+                <InfoRow icon="🔄">
+                  <b>New partner every round.</b> Pairings rotate for maximum variety — it's you against the field, not
+                  fixed teams.
+                </InfoRow>
+                {d.players.some((p) => p.level != null) && (
+                  <InfoRow icon="⚖️">
+                    <b>Teams are balanced by level</b> — strong + weak vs strong + weak whenever the draw allows.
+                  </InfoRow>
+                )}
+              </>
             )}
             <InfoRow icon="🏟️">
               {d.courts} court{d.courts === 1 ? "" : "s"} per round. Extra players sit out, and sit-outs rotate so
@@ -597,6 +605,12 @@ function PlayersCard({ d, isOrganizer, run, busyKey, checkinMode = false }: View
         {inCount < 4 ? `Needs at least 4 players` : `${Math.min(d.courts, Math.floor(inCount / 4))} court${Math.min(d.courts, Math.floor(inCount / 4)) === 1 ? "" : "s"} per round`}
         {d.counts.waitlist > 0 && ` · ${d.counts.waitlist} waitlisted`}
       </p>
+      {isOrganizer && visible.length > 0 && (
+        <p className="-mt-1 mb-3 text-xs text-muted">
+          Levels: <b className="text-navy">{visible.filter((p) => p.level != null).length}</b> of {visible.length} set ·{" "}
+          {d.format === "mexicano" ? "they seed round 1 so the ladder starts sorted" : "they balance the teams on each court"}.
+        </p>
+      )}
 
       {visible.length === 0 && <p className="py-4 text-center text-sm text-muted">Nobody yet — share the invite link or add names below.</p>}
       <ul className="divide-y divide-line">
@@ -621,6 +635,15 @@ function PlayersCard({ d, isOrganizer, run, busyKey, checkinMode = false }: View
               {p.id === d.myPlayerId && <span className="ml-1.5 text-xs font-bold text-royal">you</span>}
             </span>
             <div className="flex shrink-0 items-center gap-1.5">
+              {isOrganizer ? (
+                <LevelSelect
+                  value={p.level}
+                  busy={busyKey === `lvl-${p.id}`}
+                  onChange={(level) => run(`lvl-${p.id}`, () => Api.playerAction(d.id, p.id, "set_level", { level }))}
+                />
+              ) : (
+                <LevelBadge level={p.level} />
+              )}
               {playerStatusBadge(p)}
               {isOrganizer && p.status === "waitlist" && (
                 <Button
@@ -717,6 +740,15 @@ function MyStatusCard({ d, run, busyKey }: { d: SessionDetail; run: Run; busyKey
           </Button>
         </div>
       )}
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-line/60 pt-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-navy">Your level</p>
+          <p className="text-xs text-muted">
+            {d.format === "mexicano" ? "Seeds round 1 so you start on the right court." : "Helps balance the teams."}
+          </p>
+        </div>
+        <LevelSelect value={me.level} busy={busyKey === "mylevel"} onChange={(level) => run("mylevel", () => Api.setMyLevel(d.id, level))} />
+      </div>
     </Card>
   );
 }
@@ -1194,15 +1226,26 @@ function LiveRosterCard({ d, isOrganizer, run, busyKey }: ViewProps) {
                           {p.isGuest && <span className="ml-1.5 text-xs font-medium text-faint">guest</span>}
                           {me && <span className="ml-1.5 text-xs font-bold text-royal">you</span>}
                         </p>
-                        <p className="text-[11px] text-muted">
-                          {p.status === "checked_in" ? "playing" : "not checked in"}
-                          {row.byes > 0 ? ` · sat out ${row.byes}` : ""}
-                          <span className="sm:hidden">
-                            {" "}
-                            · {row.wins}-{row.losses}
-                            {row.ties > 0 ? `-${row.ties}` : ""}
+                        <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted">
+                          {isOrganizer ? (
+                            <LevelSelect
+                              value={p.level}
+                              busy={busyKey === `lvl-${p.id}`}
+                              onChange={(level) => run(`lvl-${p.id}`, () => Api.playerAction(d.id, p.id, "set_level", { level }))}
+                            />
+                          ) : (
+                            <LevelBadge level={p.level} />
+                          )}
+                          <span>
+                            {p.status === "checked_in" ? "playing" : "not checked in"}
+                            {row.byes > 0 ? ` · sat out ${row.byes}` : ""}
+                            <span className="sm:hidden">
+                              {" "}
+                              · {row.wins}-{row.losses}
+                              {row.ties > 0 ? `-${row.ties}` : ""}
+                            </span>
                           </span>
-                        </p>
+                        </div>
                       </div>
                     </div>
                   </td>

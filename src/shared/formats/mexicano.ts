@@ -11,6 +11,8 @@ import { americano, pickByes } from "./americano";
 //  - Byes rotate fairly (fewest sit-outs first), same as Americano — the
 //    players at the bottom shouldn't also be the ones sitting out.
 //  - Players with no results yet (late arrivals) start on the bottom court.
+//  - If the organizer (or the players) set ability levels, round 1 is seeded
+//    from them instead of drawn at random — the ladder starts sorted.
 
 function repeatPartners(a: [string, string], b: [string, string], ctx: EngineContext): number {
   return (ctx.partnerCounts[pairKey(a[0], a[1])] ?? 0) + (ctx.partnerCounts[pairKey(b[0], b[1])] ?? 0);
@@ -23,8 +25,15 @@ export const mexicano: FormatStrategy = {
   defaultPoints: 24,
 
   planRound(ctx: EngineContext): RoundPlan {
-    // Nothing on the board yet → random draw.
-    if (ctx.standings.length === 0) return americano.planRound(ctx);
+    // Nothing on the board yet → seed from levels if any are set, else a random draw.
+    let standings = ctx.standings;
+    if (standings.length === 0) {
+      const seeded = ctx.players.filter((p) => ctx.levels?.[p] != null);
+      if (seeded.length === 0) return americano.planRound(ctx);
+      standings = seeded
+        .map((playerId) => ({ playerId, points: ctx.levels![playerId] }))
+        .sort((a, b) => b.points - a.points);
+    }
 
     const courtCount = Math.min(ctx.courts, Math.floor(ctx.players.length / 4));
     if (courtCount === 0) {
@@ -35,8 +44,8 @@ export const mexicano: FormatStrategy = {
 
     // Shuffle first so exact ties and unranked players land in random order;
     // the sort is stable, so the ranking decides everything else.
-    const rank = new Map(ctx.standings.map((s, i) => [s.playerId, i]));
-    const unranked = ctx.standings.length;
+    const rank = new Map(standings.map((s, i) => [s.playerId, i]));
+    const unranked = standings.length;
     const ranked = shuffle(
       ctx.players.filter((p) => !byeSet.has(p)),
       ctx.rng,

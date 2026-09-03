@@ -7,6 +7,7 @@ import { Badge, Button, Card, ErrorNote, InfoRow, PageSpinner, ProgressBar, Stat
 import { Logo } from "../App";
 import { statusTone } from "./Home";
 import { formatMeta } from "../../shared/formatMeta";
+import { LevelSelect } from "../components/LevelSelect";
 
 export function JoinPage() {
   const { code = "" } = useParams();
@@ -14,6 +15,8 @@ export function JoinPage() {
   const { data, error, loading, reload } = useLoad(() => Api.joinInfo(code), [code]);
   const [joinErr, setJoinErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // undefined = untouched → fall back to the level the server remembers
+  const [levelPick, setLevelPick] = useState<number | null | undefined>(undefined);
   const navigate = useNavigate();
 
   if (loading || isPending) return <PageSpinner />;
@@ -64,7 +67,12 @@ export function JoinPage() {
               ? "Finished"
               : "Cancelled";
 
-  const join = (here: boolean) => act(here ? "here" : "join", () => Api.join(code, { here }));
+  const level = levelPick === undefined ? data.myLevel : levelPick;
+  const join = (here: boolean) => act(here ? "here" : "join", () => Api.join(code, { here, level }));
+  const pickLevel = (l: number | null) => {
+    setLevelPick(l);
+    if (joined) act("level", () => Api.setMyLevel(data.sessionId, l));
+  };
   const checkIn = () => act("here", () => Api.selfCheckin(data.sessionId));
   const openSession = () => navigate(`/app/sessions/${data.sessionId}`);
 
@@ -118,6 +126,21 @@ export function JoinPage() {
               {data.waitlistCount > 0 && ` · ${data.waitlistCount} waitlisted`}
             </p>
           </Card>
+
+          {!over && (
+            <Card className="mt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-lg font-black text-navy">Your level</h3>
+                  <p className="text-xs text-muted">
+                    {data.format === "mexicano" ? "Seeds round 1 so you start on the right court." : "Helps balance the teams."}{" "}
+                    Optional.
+                  </p>
+                </div>
+                <LevelSelect value={level} busy={busy === "level"} onChange={pickLevel} />
+              </div>
+            </Card>
+          )}
 
           <Card className="mt-4">
             <h3 className="mb-1 text-lg font-black text-navy">How it works</h3>

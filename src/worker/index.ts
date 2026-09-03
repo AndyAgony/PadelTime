@@ -2,8 +2,15 @@ import { Hono } from "hono";
 import { makeAuth } from "./auth";
 import type { Env } from "./env";
 import { api } from "./routes";
+import { ensureSchema } from "./lib/ensureSchema";
 
 const app = new Hono<{ Bindings: Env }>();
+
+// Additive schema changes that couldn't be applied from the deploy pipeline.
+app.use("/api/*", async (c, next) => {
+  await ensureSchema(c.env.DB);
+  await next();
+});
 
 // Better Auth owns /api/auth/* (sign-up, sign-in, session, sign-out, …).
 app.on(["GET", "POST"], "/api/auth/*", (c) =>

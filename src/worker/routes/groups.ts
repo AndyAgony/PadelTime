@@ -247,6 +247,7 @@ groupRoutes.post("/sessions", async (c) => {
           status: "confirmed",
           joinedAt: ts + i,
           checkedInAt: null,
+          level: p.level,
         }));
       if (rows.length > 0) await db.insert(sessionPlayers).values(rows);
     }

@@ -61,9 +61,10 @@ export const Api = {
   sessionAction: (id: string, action: string) => req(`/sessions/${id}/status`, post({ action })),
 
   addGuest: (id: string, guestName: string) => req(`/sessions/${id}/players`, post({ guestName })),
-  playerAction: (id: string, playerId: string, action: string) =>
-    req(`/sessions/${id}/players/${playerId}`, patch({ action })),
+  playerAction: (id: string, playerId: string, action: string, extra: Record<string, unknown> = {}) =>
+    req(`/sessions/${id}/players/${playerId}`, patch({ action, ...extra })),
   selfCheckin: (id: string) => req(`/sessions/${id}/checkin`, post({})),
+  setMyLevel: (id: string, level: number | null) => req(`/sessions/${id}/level`, post({ level })),
   leave: (id: string) => req(`/sessions/${id}/leave`, post({})),
 
   nextRound: (id: string, opts: { force?: boolean; regenerate?: boolean } = {}) =>
@@ -77,7 +78,8 @@ export const Api = {
   disputeScore: (matchId: string) => req(`/matches/${matchId}/dispute`, post({})),
 
   joinInfo: (code: string) => req<JoinInfo>(`/join/${code}`),
-  join: (code: string, opts: { here?: boolean } = {}) => req<{ status: PlayerStatus }>(`/join/${code}`, post(opts)),
+  join: (code: string, opts: { here?: boolean; level?: number | null } = {}) =>
+    req<{ status: PlayerStatus }>(`/join/${code}`, post(opts)),
   board: (code: string) => req<BoardData>(`/board/${code}`),
 };
 

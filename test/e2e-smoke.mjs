@@ -96,6 +96,13 @@ for (const g of ["George", "John", "Zach", "Mike", "Ben", "Chris"]) {
   await org.getByText(g).first().waitFor({ timeout: 10000 });
 }
 log("organizer + 6 guests in roster");
+const levelOf = (pg, name) => pg.locator("li", { hasText: name }).getByRole("combobox", { name: "Level" });
+await levelOf(org, "George").selectOption("4");
+await org.waitForTimeout(800);
+await org.reload();
+await org.getByText("Invite players").waitFor({ timeout: 10000 });
+if ((await levelOf(org, "George").inputValue()) !== "4") fail("George's level should persist as Advanced");
+log("organizer set George's level (Advanced) — persists");
 await shot(org, "02-roster-open");
 
 // --- Player joins via invite link ------------------------------------------
@@ -108,6 +115,7 @@ await paula.getByRole("button", { name: "Continue with email →" }).click();
 await paula.waitForURL("**/login**");
 await otpSignIn(paula, "Paula", `paula${run}@test.com`);
 await paula.waitForURL("**/join/**", { timeout: 15000 });
+await paula.getByRole("combobox", { name: "Level" }).selectOption("2"); // Beginner, sent with the join
 await paula.getByRole("button", { name: /Join session|Join waitlist/ }).click({ timeout: 15000 });
 await paula.getByText("You're in ✓").waitFor({ timeout: 10000 });
 await paula.getByRole("button", { name: "Open session" }).click();
@@ -117,7 +125,8 @@ log("Paula joined via invite link (8 players total)");
 // --- Check-in --------------------------------------------------------------
 await org.getByRole("button", { name: "Start check-in" }).click();
 await org.getByText("Only checked-in players").waitFor({ timeout: 10000 });
-log("check-in started");
+if ((await levelOf(org, "Paula").inputValue()) !== "2") fail("Paula's self-set level should show in the roster");
+log("check-in started (Paula's self-reported level shows as Beginner)");
 
 await paula.getByRole("button", { name: /I'm here/ }).click({ timeout: 15000 });
 await paula.getByText("You're checked in").waitFor({ timeout: 10000 });
@@ -246,6 +255,7 @@ await org.getByText("George").first().waitFor({ timeout: 10000 });
 if ((await org.locator("ul > li").count()) < 8) fail("copied roster should have 8 players");
 await org.getByText("Mexicano").first().waitFor();
 await org.getByText("Round 1 is a random draw").waitFor();
+if ((await levelOf(org, "George").inputValue()) !== "4") fail("bring-back should carry levels over");
 log("bring back players: new competitive (Mexicano) session pre-loaded with previous roster");
 await org.goto(`${BASE}/app`);
 await org.getByRole("button", { name: "+ New session" }).click();

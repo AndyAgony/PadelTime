@@ -1,9 +1,11 @@
-import { and, desc, eq, like } from "drizzle-orm";
+import { and, desc, eq, isNotNull, like } from "drizzle-orm";
 import { Hono } from "hono";
 import type { BoardData, JoinInfo, PlayerStatus, SessionStatus } from "../../shared/types";
 import { computeStandings } from "../../shared/standings";
 import { groupMembers, sessionPlayers, verification } from "../db/schema";
+import type { DB } from "../lib/detail";
 import { loadPlayers, loadRounds, loadSessionByCode } from "../lib/detail";
+import { parseLevel } from "../../shared/levels";
 import { newId, now } from "../lib/util";
 import type { ApiCtx } from "./context";
 
@@ -26,6 +28,17 @@ publicRoutes.get("/dev/otp", async (c) => {
   if (!row) return c.json({ error: "No code found" }, 404);
   return c.json({ identifier: row.identifier, value: row.value });
 });
+
+/** The level a player last used, so they don't re-enter it every session. */
+async function rememberedLevel(db: DB, userId: string): Promise<number | null> {
+  const [row] = await db
+    .select({ level: sessionPlayers.level })
+    .from(sessionPlayers)
+    .where(and(eq(sessionPlayers.userId, userId), isNotNull(sessionPlayers.level)))
+    .orderBy(desc(sessionPlayers.joinedAt))
+    .limit(1);
+  return row?.level ?? null;
+}
 
 // Public info for an invite link — enough to decide to join.
 publicRoutes.get("/join/:code", async (c) => {
@@ -56,6 +69,7 @@ publicRoutes.get("/join/:code", async (c) => {
     waitlistCount: players.filter((p) => p.status === "waitlist").length,
     roundsPlayed: (await loadRounds(db, session.id)).length,
     myStatus: (mine?.status as PlayerStatus) ?? null,
+    myLevel: mine?.level ?? (u ? await rememberedLevel(db, u.id) : null),
   };
   return c.json(info);
 });
@@ -85,24 +99,21 @@ publicRoutes.post("/join/:code", async (c) => {
   const taken = players.filter((p) => p.status === "confirmed" || p.status === "checked_in").length;
   const target: PlayerStatus = taken >= session.maxPlayers ? "waitlist" : here ? "checked_in" : "confirmed";
   const checkedInAt = target === "checked_in" ? now() : null;
+  const requestedLevel = parseLevel(body.level);
 
   const existing = players.find((p) => p.userId === u.id);
   if (existing) {
+    const changes: Partial<typeof sessionPlayers.$inferInsert> = {};
     if (existing.status === "dropped") {
-      await db
-        .update(sessionPlayers)
-        .set({ status: target, joinedAt: now(), checkedInAt })
-        .where(eq(sessionPlayers.id, existing.id));
-      return c.json({ status: target });
+      Object.assign(changes, { status: target, joinedAt: now(), checkedInAt });
+    } else if (existing.status === "confirmed" && here) {
+      Object.assign(changes, { status: "checked_in", checkedInAt: now() });
     }
-    if (existing.status === "confirmed" && here) {
-      await db
-        .update(sessionPlayers)
-        .set({ status: "checked_in", checkedInAt: now() })
-        .where(eq(sessionPlayers.id, existing.id));
-      return c.json({ status: "checked_in" });
+    if (requestedLevel != null) changes.level = requestedLevel;
+    if (Object.keys(changes).length > 0) {
+      await db.update(sessionPlayers).set(changes).where(eq(sessionPlayers.id, existing.id));
     }
-    return c.json({ status: existing.status });
+    return c.json({ status: changes.status ?? existing.status });
   }
 
   await db.insert(sessionPlayers).values({
@@ -113,6 +124,7 @@ publicRoutes.post("/join/:code", async (c) => {
     status: target,
     joinedAt: now(),
     checkedInAt,
+    level: requestedLevel ?? (await rememberedLevel(db, u.id)),
   });
 
   // Joining a session makes you part of its group (recurring-group model, plan §18).
