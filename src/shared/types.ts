@@ -89,6 +89,8 @@ export interface MatchRow {
 export interface RoundRow {
   id: string;
   number: number;
+  /** When the round was dealt — consecutive rounds give real match durations. */
+  createdAt: number;
   byes: string[]; // session_player ids
   matches: MatchRow[];
   complete: boolean; // all matches confirmed

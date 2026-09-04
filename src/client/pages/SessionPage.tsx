@@ -815,7 +815,7 @@ function StartPreview({ d, run, busyKey }: { d: SessionDetail; run?: Run; busyKe
         courts={d.courts}
         durationMin={d.durationMin}
         points={d.pointsPerMatch}
-        onApply={canApply ? (rec) => run("rec", () => Api.updateSession(d.id, { pointsPerMatch: rec.points })) : undefined}
+        onApply={canApply ? (rec) => run("rec", () => Api.updateSession(d.id, { pointsPerMatch: rec.points, courts: rec.courts })) : undefined}
         applying={busyKey === "rec"}
       />
     </div>

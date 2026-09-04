@@ -1,10 +1,12 @@
-import { estimateRounds, planNight, recommendSetup, sweetSpot } from "../../shared/timing";
-import type { Recommendation } from "../../shared/timing";
+import { useState } from "react";
+import { SETUP_MINUTES, planNight, recommendSetup, sweetSpot } from "../../shared/timing";
+import type { Priority, Recommendation } from "../../shared/timing";
+import { cls } from "./ui";
 
 /**
  * "What you get": rounds, matches and breaks per player for a roster size,
- * courts, court time and points — the numbers that decide whether a night
- * feels like a grind or has room to socialise.
+ * courts, court time and points — with a suggestion for the chosen priority
+ * (playing time vs socialising) and, where the caller allows, a one-tap apply.
  */
 export function NightSummary({
   players,
@@ -24,11 +26,9 @@ export function NightSummary({
   onApply?: (rec: Recommendation) => void;
   applying?: boolean;
 }) {
+  const [priority, setPriority] = useState<Priority>("playing");
   const p = planNight(players, courts, durationMin, points);
   const spot = sweetSpot(courts);
-  const shorter = points > 16 ? estimateRounds(durationMin, 16) : null;
-  const rec = recommendSetup(players, courts, durationMin);
-  const suggest = rec && rec.points !== points && rec.rounds != null && p.rounds != null && rec.rounds > p.rounds ? rec : null;
   if (players < 4) {
     return (
       <div className="rounded-2xl bg-canvas px-4 py-3 text-sm text-ink">
@@ -37,6 +37,10 @@ export function NightSummary({
       </div>
     );
   }
+  // Courts can only be suggested downwards from what's available (social mode).
+  const rec = recommendSetup(players, courts, durationMin, priority);
+  const differs = rec && (rec.points !== points || rec.courts !== p.courtsUsed);
+  const recPlan = rec ? planNight(players, rec.courts, durationMin, rec.points) : null;
   return (
     <div className="rounded-2xl bg-canvas px-4 py-3 text-sm text-ink">
       <p>
@@ -53,42 +57,70 @@ export function NightSummary({
       </p>
       {p.rounds != null && p.courtsUsed > 0 && (
         <p className="mt-1 text-xs text-muted">
-          {durationMin} min of {points}-point games ≈ <span className="font-bold text-navy">{p.rounds} rounds</span> · each player plays ~
+          {durationMin} min (≈ {Math.max((durationMin ?? 0) - SETUP_MINUTES, 0)} of play after check-in) of {points}-point games ≈{" "}
+          <span className="font-bold text-navy">{p.rounds} rounds</span> of ~{p.minutesPerMatch} min · each player plays ~
           <span className="font-bold text-navy">{p.matchesPerPlayer}</span>
           {p.sitting > 0 ? (
             <>
               {" "}
-              and sits out ~<span className="font-bold text-navy">{p.sitOutsPerPlayer}</span> (≈ {p.breakMinutes} min of breaks)
+              and sits out ~<span className="font-bold text-navy">{p.sitOutsPerPlayer}</span> (a sit-out is one round, ≈{" "}
+              {p.minutesPerMatch} min)
             </>
           ) : (
             <> — no breaks until the end</>
           )}
           .
-          {!suggest && shorter != null && shorter > p.rounds && (
-            <>
-              {" "}
-              16-point games would fit <span className="font-bold text-navy">{shorter} rounds</span>.
-            </>
-          )}
         </p>
       )}
-      {suggest && (
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-muted">Priority:</span>
+        {(
+          [
+            ["playing", "🎾 Playing time"],
+            ["social", "🍻 Socialising"],
+          ] as const
+        ).map(([key, text]) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={priority === key}
+            onClick={() => setPriority(key)}
+            className={cls(
+              "rounded-full border px-2.5 py-1 font-bold transition-colors",
+              priority === key ? "border-navy bg-navy text-white" : "border-line bg-white text-navy hover:border-line-strong",
+            )}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+      {rec && recPlan && differs ? (
         <p className="mt-2 flex flex-wrap items-center gap-2 text-xs">
           <span className="font-semibold text-navy">
-            💡 Suggested: {suggest.points}-point games → {suggest.rounds} rounds instead of {p.rounds}. Shorter games, more
-            partners.
+            💡 Suggested: {rec.courts} court{rec.courts === 1 ? "" : "s"} · {rec.points}-point games
+            {recPlan.rounds != null && <> → {recPlan.rounds} rounds</>}
+            {recPlan.sitting > 0 ? (
+              <>
+                , {recPlan.sitting} sit each round (≈ {recPlan.minutesPerMatch} min breaks)
+              </>
+            ) : (
+              <>, nobody sits out</>
+            )}
+            .
           </span>
           {onApply && (
             <button
               type="button"
               disabled={applying}
-              onClick={() => onApply(suggest)}
+              onClick={() => onApply(rec)}
               className="rounded-full bg-royal px-3 py-1 font-bold text-white hover:bg-royal-dark disabled:opacity-50"
             >
-              Use {suggest.points} points
+              Use this
             </button>
           )}
         </p>
+      ) : (
+        rec && <p className="mt-2 text-xs font-semibold text-mint-dark">✓ This is the suggested setup for {priority === "social" ? "socialising" : "playing time"}.</p>
       )}
       <p className="mt-1 text-xs text-muted">
         Sweet spot for {courts} court{courts === 1 ? "" : "s"}: {spot.min}–{spot.max} players (everyone plays 60–100% of rounds).

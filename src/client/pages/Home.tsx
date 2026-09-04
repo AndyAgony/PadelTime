@@ -225,7 +225,7 @@ export function NewSessionModal({
           durationMin={form.durationMin}
           points={form.pointsPerMatch}
           label="players (max)"
-          onApply={(rec) => setForm({ ...form, pointsPerMatch: rec.points, courts: Math.max(form.courts, rec.courts) })}
+          onApply={(rec) => setForm({ ...form, pointsPerMatch: rec.points, courts: rec.courts })}
         />
         <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-line px-3.5 py-3">
           <input type="checkbox" className="mt-0.5 size-5 accent-royal" checked={form.mixedPairs} onChange={(e) => setForm({ ...form, mixedPairs: e.target.checked })} />

@@ -121,6 +121,7 @@ export async function loadRounds(db: DB, sessionId: string): Promise<RoundRow[]>
     return {
       id: r.id,
       number: r.number,
+      createdAt: r.createdAt,
       byes,
       matches: ms,
       complete: ms.length > 0 && ms.every((m) => m.status === "confirmed"),

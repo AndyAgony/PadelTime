@@ -136,11 +136,16 @@ describe("mexicano mixed pairs", () => {
 describe("night recommendation", () => {
   it("picks 16 points for a 90-minute booking and 24 for two hours", async () => {
     const { recommendSetup } = await import("../src/shared/timing");
-    expect(recommendSetup(12, 3, 90)).toEqual({ courts: 3, points: 16, rounds: 6 });
+    expect(recommendSetup(12, 3, 90)).toEqual({ courts: 3, points: 16, rounds: 7 });
     expect(recommendSetup(12, 3, 120)).toEqual({ courts: 3, points: 24, rounds: 7 });
     expect(recommendSetup(12, 3, 60)?.points).toBe(12);
     expect(recommendSetup(20, 3, 90)?.courts).toBe(3);
     expect(recommendSetup(6, 3, 90)?.courts).toBe(1);
     expect(recommendSetup(3, 3, 90)).toBeNull();
+    // socialising: ~30% sit each round, never more than 40%
+    expect(recommendSetup(12, 3, 90, "social")?.courts).toBe(2); // 4 of 12 sit
+    expect(recommendSetup(14, 3, 90, "social")?.courts).toBe(3); // 2 courts would bench 6 of 14
+    expect(recommendSetup(16, 4, 90, "social")?.courts).toBe(3); // 4 of 16 sit
+    expect(recommendSetup(8, 2, 90, "social")?.courts).toBe(2); // 1 court would bench half
   });
 });

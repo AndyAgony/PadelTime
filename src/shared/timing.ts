@@ -1,9 +1,12 @@
-// Pacing, calibrated on a real night: a rally-point match runs about 0.6 min
-// per point plus a changeover. 24 points ≈ 17 min, so 90 minutes ≈ 5 rounds;
-// 16 points ≈ 13 min ≈ 7 rounds.
+// Pacing, measured on a real night (rounds dealt 4:12, 4:29, 4:42, 4:56, 5:12):
+// a 24-point round takes ~15 min including score entry — half a minute per
+// point plus a changeover. Play starts ~10 min into the booking (arrivals,
+// check-in), so that much is set aside before counting rounds.
 export function minutesPerMatch(pointsPerMatch: number): number {
-  return Math.round(pointsPerMatch * 0.6) + 3;
+  return Math.round(pointsPerMatch * 0.5) + 3;
 }
+
+export const SETUP_MINUTES = 10;
 
 export interface NightPlan {
   minutesPerMatch: number;
@@ -50,17 +53,39 @@ export interface Recommendation {
   rounds: number | null;
 }
 
+export type Priority = "playing" | "social";
+
 /**
- * What to run: every court you can fill, and the highest points-per-game that
- * still fits 6+ rounds in the booked time (6 rounds ≈ everyone meets most of
- * the group). 90 min → 16 points; 2 hours → 24; an hour → 12.
+ * What to run. Playing: every court you can fill. Social: courts chosen so
+ * roughly 30% of the group sits each round (never more than 40%) — a sit-out
+ * lasts one round, so shorter games keep those breaks short. Either way the
+ * points are the highest that still fit 6+ rounds in the booking (6 rounds ≈
+ * everyone meets most of the group): 90 min → 16 points, 2 hours → 24.
  */
-export function recommendSetup(players: number, courtsAvailable: number, durationMin: number | null | undefined): Recommendation | null {
+export function recommendSetup(
+  players: number,
+  courtsAvailable: number,
+  durationMin: number | null | undefined,
+  priority: Priority = "playing",
+): Recommendation | null {
   if (players < 4) return null;
-  const courts = Math.max(1, Math.min(courtsAvailable, Math.floor(players / 4)));
+  const maxCourts = Math.max(1, Math.min(courtsAvailable, Math.floor(players / 4)));
+  let courts = maxCourts;
+  if (priority === "social") {
+    let best = Infinity;
+    for (let c = maxCourts; c >= 1; c--) {
+      const share = (players - c * 4) / players;
+      if (share > 0.4) continue;
+      const score = Math.abs(share - 0.3);
+      if (score <= best) {
+        best = score;
+        courts = c;
+      }
+    }
+  }
   const options = [24, 21, 16, 12];
   const fits = (p: number, n: number) => (estimateRounds(durationMin, p) ?? 0) >= n;
-  const points = !durationMin ? 24 : (options.find((p) => fits(p, 6)) ?? options.find((p) => fits(p, 4)) ?? 12);
+  const points = !durationMin ? 24 : (options.find((p) => fits(p, 6)) ?? 12);
   return { courts, points, rounds: estimateRounds(durationMin, points) };
 }
 
@@ -72,5 +97,5 @@ export function sweetSpot(courts: number): { min: number; max: number } {
 /** Rounds that fit in the booked court time (at least 1 when a duration is set). */
 export function estimateRounds(durationMin: number | null | undefined, pointsPerMatch: number): number | null {
   if (!durationMin || durationMin <= 0) return null;
-  return Math.max(1, Math.floor(durationMin / minutesPerMatch(pointsPerMatch)));
+  return Math.max(1, Math.floor(Math.max(durationMin - SETUP_MINUTES, 0) / minutesPerMatch(pointsPerMatch)));
 }
