@@ -22,6 +22,30 @@ const OPPONENT_WEIGHT = 3;
 // weak vs strong + weak rather than the two strongest together.
 const BALANCE_WEIGHT = 1;
 const SHARED_WEIGHT = 2;
+// A same-gender team when "mixed pairs" is on. Two of them on a court (60)
+// outweigh one repeat partnership (40), a double repeat (80) does not.
+const MIXED_WEIGHT = 30;
+
+function sameGenderTeam(t: [string, string], ctx: EngineContext): boolean {
+  const g0 = ctx.genders?.[t[0]];
+  const g1 = ctx.genders?.[t[1]];
+  return !!g0 && g0 === g1;
+}
+
+/**
+ * Court order for a restart. With mixed pairs on, courts are built as two women
+ * + two men for as long as both pools last; the leftovers fill the rest.
+ */
+export function drawOrder(active: string[], courtCount: number, ctx: EngineContext): string[] {
+  if (!ctx.mixedPairs || !ctx.genders) return shuffle([...active], ctx.rng);
+  const women = shuffle(active.filter((p) => ctx.genders![p] === "woman"), ctx.rng);
+  const men = shuffle(active.filter((p) => ctx.genders![p] === "man"), ctx.rng);
+  const rest = active.filter((p) => !ctx.genders![p]);
+  const mixedCourts = Math.min(courtCount, Math.floor(women.length / 2), Math.floor(men.length / 2));
+  const order: string[] = [];
+  for (let c = 0; c < mixedCourts; c++) order.push(women.pop()!, women.pop()!, men.pop()!, men.pop()!);
+  return order.concat(shuffle([...women, ...men, ...rest], ctx.rng));
+}
 
 function levelOf(id: string, ctx: EngineContext): number {
   return ctx.levels?.[id] ?? UNSET_LEVEL;
@@ -40,6 +64,10 @@ function teamsCost(a: [string, string], b: [string, string], ctx: EngineContext)
   if (ctx.levels) {
     const gap = Math.abs(levelOf(a[0], ctx) + levelOf(a[1], ctx) - levelOf(b[0], ctx) - levelOf(b[1], ctx));
     cost += BALANCE_WEIGHT * gap;
+  }
+  if (ctx.mixedPairs && ctx.genders) {
+    if (sameGenderTeam(a, ctx)) cost += MIXED_WEIGHT;
+    if (sameGenderTeam(b, ctx)) cost += MIXED_WEIGHT;
   }
   // Sharing a court at all (as partner or opponent) is what players notice —
   // "I keep ending up with the same people" — so spread that too.
@@ -107,7 +135,7 @@ export const americano: FormatStrategy = {
     let bestCost = Infinity;
     const restarts = Math.min(4000, 500 + active.length * 150);
     for (let i = 0; i < restarts; i++) {
-      const order = shuffle([...active], ctx.rng);
+      const order = drawOrder(active, courtCount, ctx);
       let cost = 0;
       const matches: PlannedMatch[] = [];
       for (let c = 0; c < courtCount; c++) {

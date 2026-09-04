@@ -27,7 +27,7 @@ import { ScoreEntry } from "../components/ScoreEntry";
 import { StandingsTable, rankStyle } from "../components/StandingsTable";
 import { statusTone } from "./Home";
 import { StylePicker } from "../components/StylePicker";
-import { LevelBadge, LevelSelect } from "../components/LevelSelect";
+import { GenderBadge, GenderSelect, GenderToggle } from "../components/GenderSelect";
 import { NightSummary } from "../components/NightSummary";
 import { FORMAT_META, formatMeta } from "../../shared/formatMeta";
 
@@ -203,9 +203,12 @@ function Hero({ d, isOrganizer, onSettings }: { d: SessionDetail; isOrganizer: b
       </div>
       <Card className="relative -mt-12 mx-3 shadow-lg">
         <div className="flex items-center justify-between gap-3">
-          <Badge tone={statusTone(d.status)}>
-            {d.status === "checkin" && d.rounds.length > 0 ? "Paused" : SESSION_STATUS_LABEL[d.status]}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge tone={statusTone(d.status)}>
+              {d.status === "checkin" && d.rounds.length > 0 ? "Paused" : SESSION_STATUS_LABEL[d.status]}
+            </Badge>
+            {d.mixedPairs && <Badge tone="zinc">👩👨 Mixed pairs</Badge>}
+          </div>
           {isOrganizer && (
             <button
               type="button"
@@ -348,9 +351,8 @@ function RulesCard({ d }: { d: SessionDetail }) {
             {d.format === "mexicano" ? (
               <>
                 <InfoRow icon="🎲">
-                  <b>Round 1 is a random draw</b> — or seeded by ability when levels are set. Then points per match
-                  played deal the courts (sitting out never costs you a court): top four on court 1, next four on court
-                  2, and so on.
+                  <b>Round 1 is a random draw.</b> Then points per match played deal the courts (sitting out never
+                  costs you a court): top four on court 1, next four on court 2, and so on.
                 </InfoRow>
                 <InfoRow icon="🏆">
                   <b>Play your level.</b> On each court it's 1st & 4th vs 2nd & 3rd, so matches stay close. Win and you
@@ -363,12 +365,12 @@ function RulesCard({ d }: { d: SessionDetail }) {
                   <b>New partner every round.</b> Pairings rotate for maximum variety — it's you against the field, not
                   fixed teams.
                 </InfoRow>
-                {d.players.some((p) => p.level != null) && (
-                  <InfoRow icon="⚖️">
-                    <b>Teams are balanced by level</b> — strong + weak vs strong + weak whenever the draw allows.
-                  </InfoRow>
-                )}
               </>
+            )}
+            {d.mixedPairs && (
+              <InfoRow icon="👩👨">
+                <b>Mixed pairs.</b> Every team is one woman and one man whenever the numbers allow.
+              </InfoRow>
             )}
             <InfoRow icon="🏟️">
               {d.courts} court{d.courts === 1 ? "" : "s"} per round. Extra players sit out, and sit-outs rotate so
@@ -444,6 +446,7 @@ function SettingsModal({
     maxPlayers: d.maxPlayers,
     pointsPerMatch: d.pointsPerMatch,
     format: d.format,
+    mixedPairs: d.mixedPairs,
   });
   const pointsLocked = d.rounds.length > 0;
   const num = (v: string, fallback: number) => {
@@ -493,6 +496,21 @@ function SettingsModal({
             <Input type="number" min={4} max={99} disabled={pointsLocked} value={form.pointsPerMatch} onChange={(e) => setForm({ ...form, pointsPerMatch: num(e.target.value, d.pointsPerMatch) })} />
           </Field>
         </div>
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-line px-3.5 py-3">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-5 accent-royal"
+            checked={form.mixedPairs}
+            onChange={(e) => setForm({ ...form, mixedPairs: e.target.checked })}
+          />
+          <span>
+            <span className="block text-sm font-bold text-navy">👩👨 Mixed pairs</span>
+            <span className="block text-xs text-muted">
+              Every team is one woman + one man whenever the numbers allow. Players say which they are when they join;
+              you can set it in the roster. Applies from the next round.
+            </span>
+          </span>
+        </label>
         {pointsLocked && (
           <p className="text-xs text-muted">Points per match are locked once a round has been dealt. Max players and courts can change any time.</p>
         )}
@@ -510,6 +528,7 @@ function SettingsModal({
                 maxPlayers: form.maxPlayers,
                 pointsPerMatch: form.pointsPerMatch,
                 format: form.format,
+                mixedPairs: form.mixedPairs,
               });
               onClose();
             })
@@ -576,6 +595,38 @@ function InviteCard({ d }: { d: SessionDetail }) {
   );
 }
 
+const firstName = (s: string) => s.trim().toLowerCase().split(/\s+/)[0] ?? "";
+
+/**
+ * "Daniel Bogatin" joined with an account while the organizer had already added
+ * guest "Daniel": offer a one-tap merge (the guest entry keeps its history).
+ */
+function MergeHint({ d, p, run, busyKey }: { d: SessionDetail; p: PlayerRow; run: Run; busyKey: string | null }) {
+  if (p.isGuest) return null;
+  const candidates = d.players.filter((g) => g.isGuest && g.status !== "dropped" && firstName(g.name) === firstName(p.name));
+  if (candidates.length === 0) return null;
+  return (
+    <span className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-muted">
+      Same person as
+      {candidates.map((g) => (
+        <button
+          key={g.id}
+          type="button"
+          disabled={busyKey === `merge-${p.id}`}
+          className="rounded-full bg-amber-soft px-2 py-0.5 font-bold text-amber-dark hover:brightness-95 disabled:opacity-50"
+          onClick={() => {
+            if (window.confirm(`Merge ${p.name} into the guest entry "${g.name}"? The guest's results are kept.`)) {
+              run(`merge-${p.id}`, () => Api.playerAction(d.id, p.id, "merge", { into: g.id }));
+            }
+          }}
+        >
+          {g.name}?
+        </button>
+      ))}
+    </span>
+  );
+}
+
 function playerStatusBadge(p: PlayerRow) {
   switch (p.status) {
     case "checked_in":
@@ -609,12 +660,6 @@ function PlayersCard({ d, isOrganizer, run, busyKey, checkinMode = false }: View
         {inCount < 4 ? `Needs at least 4 players` : `${Math.min(d.courts, Math.floor(inCount / 4))} court${Math.min(d.courts, Math.floor(inCount / 4)) === 1 ? "" : "s"} per round`}
         {d.counts.waitlist > 0 && ` · ${d.counts.waitlist} waitlisted`}
       </p>
-      {isOrganizer && visible.length > 0 && (
-        <p className="-mt-1 mb-3 text-xs text-muted">
-          Levels: <b className="text-navy">{visible.filter((p) => p.level != null).length}</b> of {visible.length} set ·{" "}
-          {d.format === "mexicano" ? "they seed round 1 so the ladder starts sorted" : "they balance the teams on each court"}.
-        </p>
-      )}
 
       {visible.length === 0 && <p className="py-4 text-center text-sm text-muted">Nobody yet — share the invite link or add names below.</p>}
       <ul className="divide-y divide-line">
@@ -633,20 +678,22 @@ function PlayersCard({ d, isOrganizer, run, busyKey, checkinMode = false }: View
             ) : (
               <Avatar name={p.name} size="sm" ring={p.id === d.myPlayerId} />
             )}
-            <span className="min-w-0 flex-1 truncate font-bold text-navy">
-              {p.name}
-              {p.isGuest && <span className="ml-1.5 text-xs font-medium text-faint">guest</span>}
-              {p.id === d.myPlayerId && <span className="ml-1.5 text-xs font-bold text-royal">you</span>}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-bold text-navy">
+                {p.name}
+                {!isOrganizer && <GenderBadge gender={p.gender} className="ml-1.5" />}
+                {p.isGuest && <span className="ml-1.5 text-xs font-medium text-faint">guest</span>}
+                {p.id === d.myPlayerId && <span className="ml-1.5 text-xs font-bold text-royal">you</span>}
+              </span>
+              {isOrganizer && <MergeHint d={d} p={p} run={run} busyKey={busyKey} />}
             </span>
             <div className="flex shrink-0 items-center gap-1.5">
-              {isOrganizer ? (
-                <LevelSelect
-                  value={p.level}
-                  busy={busyKey === `lvl-${p.id}`}
-                  onChange={(level) => run(`lvl-${p.id}`, () => Api.playerAction(d.id, p.id, "set_level", { level }))}
+              {isOrganizer && (
+                <GenderSelect
+                  value={p.gender}
+                  busy={busyKey === `g-${p.id}`}
+                  onChange={(gender) => run(`g-${p.id}`, () => Api.playerAction(d.id, p.id, "set_gender", { gender }))}
                 />
-              ) : (
-                <LevelBadge level={p.level} />
               )}
               {playerStatusBadge(p)}
               {isOrganizer && p.status === "waitlist" && (
@@ -744,15 +791,15 @@ function MyStatusCard({ d, run, busyKey }: { d: SessionDetail; run: Run; busyKey
           </Button>
         </div>
       )}
-      <div className="mt-3 flex items-center justify-between gap-3 border-t border-line/60 pt-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-navy">Your level</p>
-          <p className="text-xs text-muted">
-            {d.format === "mexicano" ? "Seeds round 1 so you start on the right court." : "Helps balance the teams."}
-          </p>
+      {d.mixedPairs && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line/60 pt-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-navy">You are</p>
+            <p className="text-xs text-muted">Mixed pairs night — teams are one woman + one man.</p>
+          </div>
+          <GenderToggle value={me.gender} busy={busyKey === "mygender"} onChange={(gender) => run("mygender", () => Api.setMyGender(d.id, gender))} />
         </div>
-        <LevelSelect value={me.level} busy={busyKey === "mylevel"} onChange={(level) => run("mylevel", () => Api.setMyLevel(d.id, level))} />
-      </div>
+      )}
     </Card>
   );
 }
@@ -1215,13 +1262,13 @@ function LiveRosterCard({ d, isOrganizer, run, busyKey }: ViewProps) {
                         </p>
                         <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted">
                           {isOrganizer ? (
-                            <LevelSelect
-                              value={p.level}
-                              busy={busyKey === `lvl-${p.id}`}
-                              onChange={(level) => run(`lvl-${p.id}`, () => Api.playerAction(d.id, p.id, "set_level", { level }))}
+                            <GenderSelect
+                              value={p.gender}
+                              busy={busyKey === `g-${p.id}`}
+                              onChange={(gender) => run(`g-${p.id}`, () => Api.playerAction(d.id, p.id, "set_gender", { gender }))}
                             />
                           ) : (
-                            <LevelBadge level={p.level} />
+                            <GenderBadge gender={p.gender} />
                           )}
                           <span>
                             {p.status === "checked_in" ? "playing" : "not checked in"}
@@ -1234,6 +1281,7 @@ function LiveRosterCard({ d, isOrganizer, run, busyKey }: ViewProps) {
                             </span>
                           </span>
                         </div>
+                        {isOrganizer && <MergeHint d={d} p={p} run={run} busyKey={busyKey} />}
                       </div>
                     </div>
                   </td>
@@ -1580,7 +1628,7 @@ function CompleteView({ d, isOrganizer, run, busyKey }: ViewProps) {
       )}
       <Card>
         <SectionHeader title="Standings" />
-        <StandingsTable standings={d.standings} highlightId={d.myPlayerId} />
+        <StandingsTable standings={d.standings.filter((s) => s.played > 0)} highlightId={d.myPlayerId} />
       </Card>
       <RoundHistory rounds={d.rounds} nameOf={nameOf} />
       {isOrganizer && (

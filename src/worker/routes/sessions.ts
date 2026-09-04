@@ -1,11 +1,11 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { Hono } from "hono";
-import { gameSessions, rounds, sessionPlayers } from "../db/schema";
+import { gameSessions, matches, rounds, sessionPlayers } from "../db/schema";
 import type { DB, SessionRow } from "../lib/detail";
 import { buildDetail, isGroupMember, isGroupOrganizer, loadRounds, loadSession } from "../lib/detail";
 import { generateNextRound } from "../lib/engine";
 import { getFormat } from "../../shared/formats/registry";
-import { parseLevel } from "../../shared/levels";
+import { parseGender } from "../../shared/genders";
 import { asInt, newId, now, trimmed } from "../lib/util";
 import type { ApiCtx, AuthedUser } from "./context";
 
@@ -80,6 +80,7 @@ sessionRoutes.patch("/sessions/:id", async (c) => {
     if (!format) return c.json({ error: `Unknown format "${body.format}"` }, 400);
     patch.format = format.key;
   }
+  if (typeof body.mixedPairs === "boolean") patch.mixedPairs = body.mixedPairs;
 
   // Max players can change any time (extra people turn up mid-session); the
   // points per match are locked once a round has been dealt, since every
@@ -285,17 +286,55 @@ sessionRoutes.patch("/sessions/:id/players/:pid", async (c) => {
       if (player.status !== "waitlist") return c.json({ error: "Player isn't waitlisted" }, 400);
       await db.update(sessionPlayers).set({ status: "confirmed" }).where(eq(sessionPlayers.id, player.id));
       break;
-    case "set_level":
-      await db.update(sessionPlayers).set({ level: parseLevel(body.level) }).where(eq(sessionPlayers.id, player.id));
+    case "set_gender":
+      await db.update(sessionPlayers).set({ gender: parseGender(body.gender) }).where(eq(sessionPlayers.id, player.id));
       break;
+    case "merge": {
+      // "Brandon Pourmorady" (account) is the same person as guest "Brandon P":
+      // the guest row keeps its history and becomes the account's row.
+      const [guest] = await db
+        .select()
+        .from(sessionPlayers)
+        .where(
+          and(
+            eq(sessionPlayers.id, String(body.into ?? "")),
+            eq(sessionPlayers.sessionId, session.id),
+            isNull(sessionPlayers.userId),
+          ),
+        )
+        .limit(1);
+      if (!guest || !player.userId) return c.json({ error: "Merge an account player into a guest entry" }, 400);
+      const [played] = await db
+        .select({ id: matches.id })
+        .from(matches)
+        .where(
+          and(
+            eq(matches.sessionId, session.id),
+            or(eq(matches.a1, player.id), eq(matches.a2, player.id), eq(matches.b1, player.id), eq(matches.b2, player.id)),
+          ),
+        )
+        .limit(1);
+      if (played) return c.json({ error: "This player already has matches — merge the other way round" }, 400);
+      await db.delete(sessionPlayers).where(eq(sessionPlayers.id, player.id));
+      await db
+        .update(sessionPlayers)
+        .set({
+          userId: player.userId,
+          guestName: null,
+          gender: guest.gender ?? player.gender,
+          level: guest.level ?? player.level,
+        })
+        .where(eq(sessionPlayers.id, guest.id));
+      break;
+    }
     default:
       return c.json({ error: "Unknown action" }, 400);
   }
   return c.json({ ok: true });
 });
 
-// "I'm a beginner / intermediate / …" — players rate themselves; the organizer can override.
-sessionRoutes.post("/sessions/:id/level", async (c) => {
+// Players say whether they're a woman or a man (for mixed pairs); the organizer can override.
+sessionRoutes.post("/sessions/:id/gender", async (c) => {
   const u = c.get("user");
   if (!u) return c.json({ error: "Sign in required" }, 401);
   const db = c.get("db");
@@ -310,7 +349,7 @@ sessionRoutes.post("/sessions/:id/level", async (c) => {
     .where(and(eq(sessionPlayers.sessionId, session.id), eq(sessionPlayers.userId, u.id)))
     .limit(1);
   if (!me) return c.json({ error: "Join the session first" }, 400);
-  await db.update(sessionPlayers).set({ level: parseLevel(body.level) }).where(eq(sessionPlayers.id, me.id));
+  await db.update(sessionPlayers).set({ gender: parseGender(body.gender) }).where(eq(sessionPlayers.id, me.id));
   return c.json({ ok: true });
 });
 

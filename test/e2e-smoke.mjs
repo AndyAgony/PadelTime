@@ -96,13 +96,13 @@ for (const g of ["George", "John", "Zach", "Mike", "Ben", "Chris"]) {
   await org.getByText(g).first().waitFor({ timeout: 10000 });
 }
 log("organizer + 6 guests in roster");
-const levelOf = (pg, name) => pg.locator("li", { hasText: name }).getByRole("combobox", { name: "Level" });
-await levelOf(org, "George").selectOption("4");
+const genderOf = (pg, name) => pg.locator("li", { hasText: name }).getByRole("combobox", { name: "Gender" });
+await genderOf(org, "George").selectOption("man");
 await org.waitForTimeout(800);
 await org.reload();
 await org.getByText("Invite players").waitFor({ timeout: 10000 });
-if ((await levelOf(org, "George").inputValue()) !== "4") fail("George's level should persist as Advanced");
-log("organizer set George's level (Advanced) — persists");
+if ((await genderOf(org, "George").inputValue()) !== "man") fail("George's gender should persist");
+log("organizer set George as a man — persists");
 await shot(org, "02-roster-open");
 
 // --- Player joins via invite link ------------------------------------------
@@ -115,7 +115,6 @@ await paula.getByRole("button", { name: "Continue with email →" }).click();
 await paula.waitForURL("**/login**");
 await otpSignIn(paula, "Paula", `paula${run}@test.com`);
 await paula.waitForURL("**/join/**", { timeout: 15000 });
-await paula.getByRole("combobox", { name: "Level" }).selectOption("2"); // Beginner, sent with the join
 await paula.getByRole("button", { name: /Join session|Join waitlist/ }).click({ timeout: 15000 });
 await paula.getByText("You're in ✓").waitFor({ timeout: 10000 });
 await paula.getByRole("button", { name: "Open session" }).click();
@@ -125,8 +124,7 @@ log("Paula joined via invite link (8 players total)");
 // --- Check-in --------------------------------------------------------------
 await org.getByRole("button", { name: "Start check-in" }).click();
 await org.getByText("Only checked-in players").waitFor({ timeout: 10000 });
-if ((await levelOf(org, "Paula").inputValue()) !== "2") fail("Paula's self-set level should show in the roster");
-log("check-in started (Paula's self-reported level shows as Beginner)");
+log("check-in started");
 
 await paula.getByRole("button", { name: /I'm here/ }).click({ timeout: 15000 });
 await paula.getByText("You're checked in").waitFor({ timeout: 10000 });
@@ -181,7 +179,10 @@ if (standingsRows !== 8) fail(`expected 8 standings rows, saw ${standingsRows}`)
 log("standings show all 8 players");
 await shot(org, "08-standings-r1");
 
-// --- Late arrival joins while the game is live -------------------------------
+// --- Late arrival: the organizer already added "Late" by name; joining claims that entry ----
+await org.getByPlaceholder(/late arrival by name/).fill("Late");
+await org.getByRole("button", { name: "Add", exact: true }).click();
+await org.locator("tbody tr", { hasText: "Late" }).first().waitFor({ timeout: 10000 });
 const lateCtx = await browser.newContext({ ...contextOpts, viewport: { width: 390, height: 844 } });
 const late = await lateCtx.newPage();
 await late.goto(`${BASE}/join/${code}`);
@@ -195,7 +196,10 @@ await late.getByText("dealt in from the next round").waitFor({ timeout: 10000 })
 await late.getByRole("button", { name: "Open session" }).click();
 await late.waitForURL("**/app/sessions/**");
 await late.getByText("You're in from round 2").waitFor({ timeout: 10000 });
-log("late arrival joined via link while live → checked in, dealt in from round 2");
+await org.waitForTimeout(4500); // next poll
+if ((await org.locator("tbody tr", { hasText: "Late" }).count()) !== 1) fail("joining should claim the guest entry, not duplicate it");
+if ((await org.locator("tbody tr", { hasText: "Late" }).getByText("guest").count()) !== 0) fail("claimed entry should no longer be a guest");
+log("late arrival joined via link while live → claimed the pre-added guest entry, dealt in from round 2");
 await shot(late, "08b-late-joiner");
 
 // --- Pause between rounds, then resume into round 2 --------------------------
@@ -248,6 +252,7 @@ await org.getByText("Past sessions").waitFor({ timeout: 10000 });
 await org.getByRole("button", { name: "+ New session" }).click();
 await org.getByPlaceholder("Thursday Padel Jam").fill("Bring Back Night");
 await org.getByRole("button", { name: /Competitive/ }).click(); // Mexicano
+await org.getByRole("checkbox", { name: /Mixed pairs/ }).check();
 await org.locator("select").selectOption({ index: 1 });
 await org.getByRole("button", { name: "Create session", exact: true }).click();
 await org.waitForURL("**/app/sessions/**");
@@ -255,7 +260,8 @@ await org.getByText("George").first().waitFor({ timeout: 10000 });
 if ((await org.locator("ul > li").count()) < 8) fail("copied roster should have 8 players");
 await org.getByText("Mexicano").first().waitFor();
 await org.getByText("Round 1 is a random draw").waitFor();
-if ((await levelOf(org, "George").inputValue()) !== "4") fail("bring-back should carry levels over");
+if ((await genderOf(org, "George").inputValue()) !== "man") fail("bring-back should carry gender over");
+await org.getByText("Mixed pairs").first().waitFor();
 log("bring back players: new competitive (Mexicano) session pre-loaded with previous roster");
 await org.goto(`${BASE}/app`);
 await org.getByRole("button", { name: "+ New session" }).click();

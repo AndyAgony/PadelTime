@@ -17,13 +17,26 @@ export function ensureSchema(db: Env["DB"]): Promise<void> {
 }
 
 async function apply(db: Env["DB"]): Promise<void> {
-  const cols = await db.prepare("PRAGMA table_info(session_players)").all<{ name: string }>();
-  if (!cols.results.some((c) => c.name === "level")) {
-    await db.prepare("ALTER TABLE session_players ADD COLUMN level integer").run();
+  const columns = async (table: string) =>
+    new Set((await db.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>()).results.map((c) => c.name));
+  const record = async (name: string) => {
     try {
-      await db.prepare("INSERT OR IGNORE INTO d1_migrations (name) VALUES ('0004_player_levels.sql')").run();
+      await db.prepare("INSERT OR IGNORE INTO d1_migrations (name) VALUES (?)").bind(name).run();
     } catch {
       // bookkeeping only
     }
+  };
+  const players = await columns("session_players");
+  if (!players.has("level")) {
+    await db.prepare("ALTER TABLE session_players ADD COLUMN level integer").run();
+    await record("0004_player_levels.sql");
+  }
+  if (!players.has("gender")) {
+    await db.prepare("ALTER TABLE session_players ADD COLUMN gender text").run();
+    const sessions = await columns("game_sessions");
+    if (!sessions.has("mixed_pairs")) {
+      await db.prepare("ALTER TABLE game_sessions ADD COLUMN mixed_pairs integer NOT NULL DEFAULT 0").run();
+    }
+    await record("0005_gender_mixed_pairs.sql");
   }
 }

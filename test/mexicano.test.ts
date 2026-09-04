@@ -118,3 +118,17 @@ describe("court ranking", () => {
     expect(rankForCourts(rows).map((r) => r.name)).toEqual(["sat out once", "two matches", "no result"]);
   });
 });
+
+describe("mexicano mixed pairs", () => {
+  const genders = { w1: "woman", w2: "woman", w3: "woman", w4: "woman", m1: "man", m2: "man", m3: "man", m4: "man" } as const;
+  it("deals court 1 the top two women and top two men, teams mixed", () => {
+    const players = ["w1", "m1", "w2", "m2", "w3", "m3", "w4", "m4"]; // standings order
+    const plan = mexicano.planRound({ ...ctxOf(players, 2, [], ladder(players)), genders, mixedPairs: true });
+    const c1 = courtOf(plan, 1);
+    expect(new Set([...c1.a, ...c1.b])).toEqual(new Set(["w1", "w2", "m1", "m2"]));
+    // best woman + second man vs second woman + best man
+    expect(new Set([team(c1.a), team(c1.b)])).toEqual(new Set(["m2+w1", "m1+w2"]));
+    const c2 = courtOf(plan, 2);
+    expect(new Set([...c2.a, ...c2.b])).toEqual(new Set(["w3", "w4", "m3", "m4"]));
+  });
+});

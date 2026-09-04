@@ -81,7 +81,7 @@ export async function loadPlayers(db: DB, sessionId: string): Promise<PlayerRow[
       byes: 0, // filled in after rounds load
       checkedInAt: sp.checkedInAt,
       joinedAt: sp.joinedAt,
-      level: sp.level ?? null,
+      gender: (sp.gender as PlayerRow["gender"]) ?? null,
     }))
     .sort((a, b) => a.joinedAt - b.joinedAt);
 }
@@ -214,6 +214,7 @@ export async function buildDetail(
     courts: session.courts,
     maxPlayers: session.maxPlayers,
     pointsPerMatch: session.pointsPerMatch,
+    mixedPairs: session.mixedPairs,
     inviteCode: session.inviteCode,
     myRole,
     myPlayerId,

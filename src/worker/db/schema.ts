@@ -108,6 +108,8 @@ export const gameSessions = sqliteTable(
     maxPlayers: integer("max_players").notNull().default(12),
     pointsPerMatch: integer("points_per_match").notNull().default(24),
     format: text("format").notNull().default("americano"),
+    /** Every team is one woman + one man whenever the numbers allow. */
+    mixedPairs: integer("mixed_pairs", { mode: "boolean" }).notNull().default(false),
     status: text("status").notNull().default("draft"),
     inviteCode: text("invite_code").notNull().unique(),
     createdBy: text("created_by")
@@ -131,8 +133,10 @@ export const sessionPlayers = sqliteTable(
     status: text("status").notNull().default("confirmed"),
     joinedAt: integer("joined_at").notNull(),
     checkedInAt: integer("checked_in_at"),
-    /** Ability level 1 (newbie) … 4 (advanced); null = not set. Seeds round 1 / balances teams. */
+    /** Ability level 1 (newbie) … 4 (advanced); null = not set. No UI today — engine hint only. */
     level: integer("level"),
+    /** "woman" | "man" | null — drives the mixed-pairs option. */
+    gender: text("gender"),
   },
   (t) => [
     index("ix_sp_session").on(t.sessionId),

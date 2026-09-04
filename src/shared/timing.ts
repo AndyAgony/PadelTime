@@ -1,7 +1,8 @@
-// Rough Americano pacing: a rally-point match runs about half a minute per
-// point plus a changeover. 24 points ≈ 15 min, so 90 minutes ≈ 6 rounds.
+// Pacing, calibrated on a real night: a rally-point match runs about 0.6 min
+// per point plus a changeover. 24 points ≈ 17 min, so 90 minutes ≈ 5 rounds;
+// 16 points ≈ 13 min ≈ 7 rounds.
 export function minutesPerMatch(pointsPerMatch: number): number {
-  return Math.round(pointsPerMatch * 0.5) + 3;
+  return Math.round(pointsPerMatch * 0.6) + 3;
 }
 
 export interface NightPlan {

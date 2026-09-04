@@ -7,7 +7,8 @@ import { Badge, Button, Card, ErrorNote, InfoRow, PageSpinner, ProgressBar, Stat
 import { Logo } from "../App";
 import { statusTone } from "./Home";
 import { formatMeta } from "../../shared/formatMeta";
-import { LevelSelect } from "../components/LevelSelect";
+import { GenderToggle } from "../components/GenderSelect";
+import type { Gender } from "../../shared/genders";
 
 export function JoinPage() {
   const { code = "" } = useParams();
@@ -15,8 +16,8 @@ export function JoinPage() {
   const { data, error, loading, reload } = useLoad(() => Api.joinInfo(code), [code]);
   const [joinErr, setJoinErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  // undefined = untouched → fall back to the level the server remembers
-  const [levelPick, setLevelPick] = useState<number | null | undefined>(undefined);
+  // undefined = untouched → fall back to what the server remembers
+  const [genderPick, setGenderPick] = useState<Gender | null | undefined>(undefined);
   const navigate = useNavigate();
 
   if (loading || isPending) return <PageSpinner />;
@@ -67,11 +68,11 @@ export function JoinPage() {
               ? "Finished"
               : "Cancelled";
 
-  const level = levelPick === undefined ? data.myLevel : levelPick;
-  const join = (here: boolean) => act(here ? "here" : "join", () => Api.join(code, { here, level }));
-  const pickLevel = (l: number | null) => {
-    setLevelPick(l);
-    if (joined) act("level", () => Api.setMyLevel(data.sessionId, l));
+  const gender = genderPick === undefined ? data.myGender : genderPick;
+  const join = (here: boolean) => act(here ? "here" : "join", () => Api.join(code, { here, gender }));
+  const pickGender = (g: Gender | null) => {
+    setGenderPick(g);
+    if (joined) act("gender", () => Api.setMyGender(data.sessionId, g));
   };
   const checkIn = () => act("here", () => Api.selfCheckin(data.sessionId));
   const openSession = () => navigate(`/app/sessions/${data.sessionId}`);
@@ -127,18 +128,11 @@ export function JoinPage() {
             </p>
           </Card>
 
-          {!over && (
+          {!over && data.mixedPairs && (
             <Card className="mt-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="text-lg font-black text-navy">Your level</h3>
-                  <p className="text-xs text-muted">
-                    {data.format === "mexicano" ? "Seeds round 1 so you start on the right court." : "Helps balance the teams."}{" "}
-                    Optional.
-                  </p>
-                </div>
-                <LevelSelect value={level} busy={busy === "level"} onChange={pickLevel} />
-              </div>
+              <h3 className="text-lg font-black text-navy">You are…</h3>
+              <p className="mb-3 text-xs text-muted">Mixed pairs night: every team is one woman + one man, so the draw needs to know.</p>
+              <GenderToggle value={gender} busy={busy === "gender"} onChange={pickGender} />
             </Card>
           )}
 

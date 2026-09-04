@@ -28,7 +28,11 @@ export async function generateNextRound(
     .where(eq(sessionPlayers.sessionId, session.id));
   const eligible = players.filter((p) => p.status === "checked_in").map((p) => p.id);
   const levels: Record<string, number> = {};
-  for (const p of players) if (p.level != null) levels[p.id] = p.level;
+  const genders: Record<string, "woman" | "man"> = {};
+  for (const p of players) {
+    if (p.level != null) levels[p.id] = p.level;
+    if (p.gender === "woman" || p.gender === "man") genders[p.id] = p.gender;
+  }
   if (eligible.length < format.minPlayers) {
     return { error: `${format.name} needs at least ${format.minPlayers} checked-in players (currently ${eligible.length}).` };
   }
@@ -52,6 +56,8 @@ export async function generateNextRound(
     ...history,
     standings: ranked.map((r) => ({ playerId: r.playerId, points: r.points, diff: r.diff, played: r.played })),
     levels,
+    genders,
+    mixedPairs: session.mixedPairs,
     rng: Math.random,
   };
 

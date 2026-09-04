@@ -70,8 +70,8 @@ export interface PlayerRow {
   byes: number;
   checkedInAt: number | null;
   joinedAt: number;
-  /** 1 newbie … 4 advanced, or null when not set. */
-  level: number | null;
+  /** "woman" | "man" | null — used by the mixed-pairs option. */
+  gender: "woman" | "man" | null;
 }
 
 export interface MatchRow {
@@ -121,6 +121,8 @@ export interface SessionDetail {
   courts: number;
   maxPlayers: number;
   pointsPerMatch: number;
+  /** Every team is one woman + one man whenever the numbers allow. */
+  mixedPairs: boolean;
   inviteCode: string;
   myRole: "organizer" | "player" | "none";
   myPlayerId: string | null;
@@ -148,8 +150,9 @@ export interface JoinInfo {
   waitlistCount: number;
   roundsPlayed: number;
   myStatus: PlayerStatus | null;
-  /** Level on this session, or the one remembered from the last session played. */
-  myLevel: number | null;
+  /** Gender on this session, or the one remembered from the last session played. */
+  myGender: "woman" | "man" | null;
+  mixedPairs: boolean;
 }
 
 // Read-only public board (TV / court display) payload.

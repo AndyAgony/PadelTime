@@ -150,6 +150,7 @@ export function NewSessionModal({
     pointsPerMatch: 24,
     copyPlayersFrom: "",
     format: "americano" as FormatKey,
+    mixedPairs: false,
   });
   const num = (v: string, fallback: number) => {
     const n = parseInt(v, 10);
@@ -170,6 +171,7 @@ export function NewSessionModal({
         maxPlayers: form.maxPlayers,
         pointsPerMatch: form.pointsPerMatch,
         format: form.format,
+        mixedPairs: form.mixedPairs,
         copyPlayersFrom: form.copyPlayersFrom || null,
       });
       onClose();
@@ -218,6 +220,13 @@ export function NewSessionModal({
           </Field>
         </div>
         <NightSummary players={form.maxPlayers} courts={form.courts} durationMin={form.durationMin} points={form.pointsPerMatch} label="players (max)" />
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-line px-3.5 py-3">
+          <input type="checkbox" className="mt-0.5 size-5 accent-royal" checked={form.mixedPairs} onChange={(e) => setForm({ ...form, mixedPairs: e.target.checked })} />
+          <span>
+            <span className="block text-sm font-bold text-navy">👩👨 Mixed pairs</span>
+            <span className="block text-xs text-muted">Every team is one woman + one man whenever the numbers allow. Players say which they are when they join.</span>
+          </span>
+        </label>
         {previous.length > 0 && (
           <Field label="Bring back the players from" hint="Everyone from that session is added to this one — no re-inviting.">
             <select

@@ -53,6 +53,7 @@ export const Api = {
       pointsPerMatch: number;
       format: string;
       copyPlayersFrom?: string | null;
+      mixedPairs?: boolean;
     },
   ) => req<{ id: string }>(groupId ? `/groups/${groupId}/sessions` : "/sessions", post(body)),
   session: (id: string) => req<SessionDetail>(`/sessions/${id}`),
@@ -64,7 +65,7 @@ export const Api = {
   playerAction: (id: string, playerId: string, action: string, extra: Record<string, unknown> = {}) =>
     req(`/sessions/${id}/players/${playerId}`, patch({ action, ...extra })),
   selfCheckin: (id: string) => req(`/sessions/${id}/checkin`, post({})),
-  setMyLevel: (id: string, level: number | null) => req(`/sessions/${id}/level`, post({ level })),
+  setMyGender: (id: string, gender: "woman" | "man" | null) => req(`/sessions/${id}/gender`, post({ gender })),
   leave: (id: string) => req(`/sessions/${id}/leave`, post({})),
 
   nextRound: (id: string, opts: { force?: boolean; regenerate?: boolean } = {}) =>
@@ -78,7 +79,7 @@ export const Api = {
   disputeScore: (matchId: string) => req(`/matches/${matchId}/dispute`, post({})),
 
   joinInfo: (code: string) => req<JoinInfo>(`/join/${code}`),
-  join: (code: string, opts: { here?: boolean; level?: number | null } = {}) =>
+  join: (code: string, opts: { here?: boolean; gender?: "woman" | "man" | null } = {}) =>
     req<{ status: PlayerStatus }>(`/join/${code}`, post(opts)),
   board: (code: string) => req<BoardData>(`/board/${code}`),
 };

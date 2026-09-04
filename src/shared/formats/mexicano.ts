@@ -2,6 +2,49 @@ import type { EngineContext, FormatStrategy, PlannedMatch, RoundPlan } from "./t
 import { pairKey, shuffle } from "./types";
 import { americano, pickByes } from "./americano";
 
+type Split = [[string, string], [string, string]];
+
+/** Candidate team splits for a court, most balanced first. */
+function splitsFor(four: string[], ctx: EngineContext): Split[] {
+  const [p1, p2, p3, p4] = four;
+  if (ctx.mixedPairs && ctx.genders) {
+    const women = four.filter((p) => ctx.genders![p] === "woman");
+    const men = four.filter((p) => ctx.genders![p] === "man");
+    if (women.length === 2 && men.length === 2) {
+      // Both mixed splits (`four` is rank-ordered within each gender): best woman +
+      // second man vs second woman + best man first, then the straight pairing.
+      return [
+        [[women[0], men[1]], [women[1], men[0]]],
+        [[women[0], men[0]], [women[1], men[1]]],
+      ];
+    }
+  }
+  return [
+    [[p1, p4], [p2, p3]],
+    [[p1, p3], [p2, p4]],
+    [[p1, p2], [p3, p4]],
+  ];
+}
+
+/** Courts of four in rank order; with mixed pairs, two women + two men per court while both last. */
+function courtGroups(ranked: string[], courtCount: number, ctx: EngineContext): string[][] {
+  if (ctx.mixedPairs && ctx.genders) {
+    const women = ranked.filter((p) => ctx.genders![p] === "woman");
+    const men = ranked.filter((p) => ctx.genders![p] === "man");
+    const rest = ranked.filter((p) => !ctx.genders![p]);
+    const groups: string[][] = [];
+    while (groups.length < courtCount && women.length >= 2 && men.length >= 2) {
+      groups.push([women.shift()!, women.shift()!, men.shift()!, men.shift()!]);
+    }
+    // Leftovers in overall rank order fill the remaining courts.
+    const rank = new Map(ranked.map((p, i) => [p, i]));
+    const leftovers = [...women, ...men, ...rest].sort((x, y) => rank.get(x)! - rank.get(y)!);
+    while (groups.length < courtCount) groups.push(leftovers.splice(0, 4));
+    return groups;
+  }
+  return Array.from({ length: courtCount }, (_, c) => ranked.slice(c * 4, c * 4 + 4));
+}
+
 // Mexicano — the competitive sibling of Americano.
 //  - Round 1 is a random draw (no standings yet), planned exactly like Americano.
 //  - From then on players are ranked by total points and dealt in blocks of
@@ -52,14 +95,10 @@ export const mexicano: FormatStrategy = {
     ).sort((x, y) => (rank.get(x) ?? unranked) - (rank.get(y) ?? unranked));
 
     const matches: PlannedMatch[] = [];
+    const groups = courtGroups(ranked, courtCount, ctx);
     for (let c = 0; c < courtCount; c++) {
-      const [p1, p2, p3, p4] = ranked.slice(c * 4, c * 4 + 4);
       // Most balanced split first; only a fresher partnership can displace it.
-      const splits: [[string, string], [string, string]][] = [
-        [[p1, p4], [p2, p3]],
-        [[p1, p3], [p2, p4]],
-        [[p1, p2], [p3, p4]],
-      ];
+      const splits = splitsFor(groups[c], ctx);
       let pick = splits[0];
       let pickRepeats = repeatPartners(pick[0], pick[1], ctx);
       for (const s of splits.slice(1)) {

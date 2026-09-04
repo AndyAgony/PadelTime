@@ -3,6 +3,9 @@ import { makeAuth } from "./auth";
 import type { Env } from "./env";
 import { api } from "./routes";
 import { ensureSchema } from "./lib/ensureSchema";
+import { drizzle } from "drizzle-orm/d1";
+import * as schema from "./db/schema";
+import { previewFor } from "./lib/preview";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -18,6 +21,45 @@ app.on(["GET", "POST"], "/api/auth/*", (c) =>
 );
 
 app.route("/api", api);
+
+// Shared links get a real preview: the SPA shell with the session's title and
+// a live description injected (wrangler routes /join/* and /board/* here).
+const preview = (kind: "join" | "board") => async (c: { env: Env; req: { url: string; raw: Request } }) => {
+  const url = new URL(c.req.url);
+  const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url), { headers: c.req.raw.headers }));
+  const code = url.pathname.split("/")[2] ?? "";
+  let meta: Awaited<ReturnType<typeof previewFor>> = null;
+  if (code) {
+    try {
+      await ensureSchema(c.env.DB);
+      meta = await previewFor(drizzle(c.env.DB, { schema }), kind, code);
+    } catch (err) {
+      console.error("preview failed:", err);
+    }
+  }
+  if (!meta) return shell;
+  const title = `${meta.title} · PadelTime`;
+  const set = (attr: string, value: string) => ({
+    element(el: Element) {
+      el.setAttribute(attr, value);
+    },
+  });
+  return new HTMLRewriter()
+    .on("title", {
+      element(el) {
+        el.setInnerContent(title);
+      },
+    })
+    .on('meta[name="description"]', set("content", meta.description))
+    .on('meta[property="og:title"]', set("content", meta.title))
+    .on('meta[property="og:description"]', set("content", meta.description))
+    .on('meta[property="og:url"]', set("content", url.origin + url.pathname))
+    .on('meta[name="twitter:title"]', set("content", meta.title))
+    .on('meta[name="twitter:description"]', set("content", meta.description))
+    .transform(shell);
+};
+app.get("/join/*", preview("join"));
+app.get("/board/*", preview("board"));
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 app.onError((err, c) => {

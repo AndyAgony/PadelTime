@@ -5,7 +5,8 @@ import { computeStandings } from "../../shared/standings";
 import { groupMembers, sessionPlayers, verification } from "../db/schema";
 import type { DB } from "../lib/detail";
 import { loadPlayers, loadRounds, loadSessionByCode } from "../lib/detail";
-import { parseLevel } from "../../shared/levels";
+import { parseGender } from "../../shared/genders";
+import type { Gender } from "../../shared/genders";
 import { newId, now } from "../lib/util";
 import type { ApiCtx } from "./context";
 
@@ -29,15 +30,37 @@ publicRoutes.get("/dev/otp", async (c) => {
   return c.json({ identifier: row.identifier, value: row.value });
 });
 
-/** The level a player last used, so they don't re-enter it every session. */
-async function rememberedLevel(db: DB, userId: string): Promise<number | null> {
+/** The gender a player last gave, so they don't answer every session. */
+async function rememberedGender(db: DB, userId: string): Promise<Gender | null> {
   const [row] = await db
-    .select({ level: sessionPlayers.level })
+    .select({ gender: sessionPlayers.gender })
     .from(sessionPlayers)
-    .where(and(eq(sessionPlayers.userId, userId), isNotNull(sessionPlayers.level)))
+    .where(and(eq(sessionPlayers.userId, userId), isNotNull(sessionPlayers.gender)))
     .orderBy(desc(sessionPlayers.joinedAt))
     .limit(1);
-  return row?.level ?? null;
+  return parseGender(row?.gender);
+}
+
+const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+const firstName = (s: string) => norm(s).split(" ")[0] ?? "";
+
+/**
+ * Organizers often pre-add people by first name ("Daniel"), then the same
+ * person joins with an account ("Daniel Bogatin"). If exactly one unclaimed
+ * guest matches the account's name, the guest entry becomes theirs instead of
+ * a duplicate. Ambiguous cases ("Brandon P" and "Brandon P2") are left for the
+ * organizer's merge button.
+ */
+function claimableGuest<T extends { userId: string | null; guestName: string | null; status: string }>(
+  players: T[],
+  userName: string | null | undefined,
+): T | null {
+  if (!userName) return null;
+  const guests = players.filter((p) => !p.userId && p.guestName && p.status !== "dropped");
+  const exact = guests.filter((p) => norm(p.guestName!) === norm(userName));
+  if (exact.length === 1) return exact[0];
+  const byFirst = guests.filter((p) => firstName(p.guestName!) === firstName(userName));
+  return byFirst.length === 1 ? byFirst[0] : null;
 }
 
 // Public info for an invite link — enough to decide to join.
@@ -69,7 +92,8 @@ publicRoutes.get("/join/:code", async (c) => {
     waitlistCount: players.filter((p) => p.status === "waitlist").length,
     roundsPlayed: (await loadRounds(db, session.id)).length,
     myStatus: (mine?.status as PlayerStatus) ?? null,
-    myLevel: mine?.level ?? (u ? await rememberedLevel(db, u.id) : null),
+    myGender: parseGender(mine?.gender) ?? (u ? await rememberedGender(db, u.id) : null),
+    mixedPairs: session.mixedPairs,
   };
   return c.json(info);
 });
@@ -99,7 +123,7 @@ publicRoutes.post("/join/:code", async (c) => {
   const taken = players.filter((p) => p.status === "confirmed" || p.status === "checked_in").length;
   const target: PlayerStatus = taken >= session.maxPlayers ? "waitlist" : here ? "checked_in" : "confirmed";
   const checkedInAt = target === "checked_in" ? now() : null;
-  const requestedLevel = parseLevel(body.level);
+  const requestedGender = parseGender(body.gender);
 
   const existing = players.find((p) => p.userId === u.id);
   if (existing) {
@@ -109,11 +133,29 @@ publicRoutes.post("/join/:code", async (c) => {
     } else if (existing.status === "confirmed" && here) {
       Object.assign(changes, { status: "checked_in", checkedInAt: now() });
     }
-    if (requestedLevel != null) changes.level = requestedLevel;
+    if (requestedGender != null) changes.gender = requestedGender;
     if (Object.keys(changes).length > 0) {
       await db.update(sessionPlayers).set(changes).where(eq(sessionPlayers.id, existing.id));
     }
     return c.json({ status: changes.status ?? existing.status });
+  }
+
+  const gender = requestedGender ?? (await rememberedGender(db, u.id));
+  const guest = claimableGuest(players, u.name);
+  if (guest) {
+    // The organizer already added this person by name — take that entry over.
+    const status = here && guest.status === "confirmed" ? "checked_in" : guest.status;
+    await db
+      .update(sessionPlayers)
+      .set({
+        userId: u.id,
+        guestName: null,
+        status,
+        checkedInAt: status === "checked_in" ? (guest.checkedInAt ?? now()) : guest.checkedInAt,
+        gender: parseGender(guest.gender) ?? gender,
+      })
+      .where(eq(sessionPlayers.id, guest.id));
+    return c.json({ status });
   }
 
   await db.insert(sessionPlayers).values({
@@ -124,7 +166,7 @@ publicRoutes.post("/join/:code", async (c) => {
     status: target,
     joinedAt: now(),
     checkedInAt,
-    level: requestedLevel ?? (await rememberedLevel(db, u.id)),
+    gender,
   });
 
   // Joining a session makes you part of its group (recurring-group model, plan §18).
@@ -161,7 +203,11 @@ publicRoutes.get("/board/:code", async (c) => {
     pointsPerMatch: session.pointsPerMatch,
     players: players.map((p) => ({ id: p.id, name: p.name })),
     rounds,
-    standings: computeStandings(players, rounds),
+    // People who never made it onto a court don't belong on the TV.
+    standings: computeStandings(players, rounds).filter((s) => {
+      const p = players.find((x) => x.id === s.playerId);
+      return s.played > 0 || p?.status === "checked_in";
+    }),
   };
   return c.json(board);
 });

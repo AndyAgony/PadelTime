@@ -227,3 +227,42 @@ describe("americano level balancing", () => {
     expect(new Set([[...m.a].sort().join("+"), [...m.b].sort().join("+")])).toEqual(new Set(["a+b", "c+d"]));
   });
 });
+
+describe("americano mixed pairs", () => {
+  const genders = { w1: "woman", w2: "woman", w3: "woman", w4: "woman", m1: "man", m2: "man", m3: "man", m4: "man" } as const;
+  const mixedTeam = (t: [string, string]) => genders[t[0] as keyof typeof genders] !== genders[t[1] as keyof typeof genders];
+
+  it("makes every team one woman + one man when the numbers allow", () => {
+    const players = Object.keys(genders);
+    for (let seed = 1; seed <= 5; seed++) {
+      const plan = americano.planRound({ ...makeCtx(players, 2, [], seed), genders, mixedPairs: true });
+      expect(plan.matches).toHaveLength(2);
+      for (const m of plan.matches) {
+        expect(mixedTeam(m.a)).toBe(true);
+        expect(mixedTeam(m.b)).toBe(true);
+      }
+    }
+  });
+
+  it("keeps mixing across rounds without repeating partners", () => {
+    const players = Object.keys(genders);
+    const history: HistoryRound[] = [];
+    for (let r = 1; r <= 4; r++) {
+      const plan = americano.planRound({ ...makeCtx(players, 2, history, r), genders, mixedPairs: true });
+      for (const m of plan.matches) {
+        expect(mixedTeam(m.a)).toBe(true);
+        expect(mixedTeam(m.b)).toBe(true);
+      }
+      history.push({ number: r, byes: plan.byes, matches: plan.matches.map((m) => ({ a: m.a, b: m.b })) });
+    }
+    const partners: Record<string, number> = {};
+    for (const r of history) for (const m of r.matches) for (const t of [m.a, m.b]) partners[pairKey(t[0], t[1])] = (partners[pairKey(t[0], t[1])] ?? 0) + 1;
+    expect(Object.values(partners).every((v) => v === 1)).toBe(true);
+  });
+
+  it("ignores the option when a court can't be mixed", () => {
+    const players = ["w1", "w2", "w3", "w4"];
+    const plan = americano.planRound({ ...makeCtx(players, 1, []), genders, mixedPairs: true });
+    expect(plan.matches).toHaveLength(1);
+  });
+});
