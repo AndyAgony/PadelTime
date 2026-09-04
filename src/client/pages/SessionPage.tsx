@@ -804,12 +804,20 @@ function MyStatusCard({ d, run, busyKey }: { d: SessionDetail; run: Run; busyKey
   );
 }
 
-function StartPreview({ d }: { d: SessionDetail }) {
+function StartPreview({ d, run, busyKey }: { d: SessionDetail; run?: Run; busyKey?: string | null }) {
   const ready = d.counts.confirmed + d.counts.checkedIn;
   if (ready === 0) return null;
+  const canApply = run && d.myRole === "organizer" && d.rounds.length === 0;
   return (
     <div className="mt-3">
-      <NightSummary players={ready} courts={d.courts} durationMin={d.durationMin} points={d.pointsPerMatch} />
+      <NightSummary
+        players={ready}
+        courts={d.courts}
+        durationMin={d.durationMin}
+        points={d.pointsPerMatch}
+        onApply={canApply ? (rec) => run("rec", () => Api.updateSession(d.id, { pointsPerMatch: rec.points })) : undefined}
+        applying={busyKey === "rec"}
+      />
     </div>
   );
 }
@@ -828,7 +836,7 @@ function DraftView({ d, isOrganizer, run, busyKey }: ViewProps) {
             Add players by name below and start whenever you have enough — or open signup and share the invite link
             so people join themselves.
           </p>
-          <StartPreview d={d} />
+          <StartPreview d={d} run={run} busyKey={busyKey} />
           <div className="mt-4 flex flex-wrap gap-2">
             <Button busy={busyKey === "start"} disabled={ready < 4} onClick={() => run("start", () => Api.sessionAction(d.id, "start"))}>
               Start session →
@@ -860,7 +868,7 @@ function OpenView({ d, isOrganizer, run, busyKey }: ViewProps) {
             Start now to play with everyone who's signed up, or run check-in first so only the people actually at the
             club get scheduled.
           </p>
-          <StartPreview d={d} />
+          <StartPreview d={d} run={run} busyKey={busyKey} />
           <div className="mt-4 flex flex-wrap gap-2">
             <Button
               busy={busyKey === "start"}

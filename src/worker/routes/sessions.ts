@@ -267,13 +267,31 @@ sessionRoutes.patch("/sessions/:id/players/:pid", async (c) => {
         .set({ status: "confirmed", checkedInAt: null })
         .where(eq(sessionPlayers.id, player.id));
       break;
-    case "drop":
-      await db
-        .update(sessionPlayers)
-        .set({ status: "dropped", checkedInAt: null })
-        .where(eq(sessionPlayers.id, player.id));
+    case "drop": {
+      // No history on the board → the entry simply goes away. Someone who has
+      // played (or sat a round out) stays as "out" so the rounds keep their name.
+      const [played] = await db
+        .select({ id: matches.id })
+        .from(matches)
+        .where(
+          and(
+            eq(matches.sessionId, session.id),
+            or(eq(matches.a1, player.id), eq(matches.a2, player.id), eq(matches.b1, player.id), eq(matches.b2, player.id)),
+          ),
+        )
+        .limit(1);
+      const satOut = (await loadRounds(db, session.id)).some((r) => r.byes.includes(player.id));
+      if (played || satOut) {
+        await db
+          .update(sessionPlayers)
+          .set({ status: "dropped", checkedInAt: null })
+          .where(eq(sessionPlayers.id, player.id));
+      } else {
+        await db.delete(sessionPlayers).where(eq(sessionPlayers.id, player.id));
+      }
       if (["draft", "open", "checkin"].includes(session.status)) await promoteWaitlist(db, session);
       break;
+    }
     case "restore": {
       const live = ["checkin", "active"].includes(session.status);
       await db

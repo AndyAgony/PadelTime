@@ -132,3 +132,15 @@ describe("mexicano mixed pairs", () => {
     expect(new Set([...c2.a, ...c2.b])).toEqual(new Set(["w3", "w4", "m3", "m4"]));
   });
 });
+
+describe("night recommendation", () => {
+  it("picks 16 points for a 90-minute booking and 24 for two hours", async () => {
+    const { recommendSetup } = await import("../src/shared/timing");
+    expect(recommendSetup(12, 3, 90)).toEqual({ courts: 3, points: 16, rounds: 6 });
+    expect(recommendSetup(12, 3, 120)).toEqual({ courts: 3, points: 24, rounds: 7 });
+    expect(recommendSetup(12, 3, 60)?.points).toBe(12);
+    expect(recommendSetup(20, 3, 90)?.courts).toBe(3);
+    expect(recommendSetup(6, 3, 90)?.courts).toBe(1);
+    expect(recommendSetup(3, 3, 90)).toBeNull();
+  });
+});

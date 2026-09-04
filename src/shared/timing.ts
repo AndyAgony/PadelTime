@@ -44,6 +44,26 @@ export function planNight(players: number, courts: number, durationMin: number |
   };
 }
 
+export interface Recommendation {
+  courts: number;
+  points: number;
+  rounds: number | null;
+}
+
+/**
+ * What to run: every court you can fill, and the highest points-per-game that
+ * still fits 6+ rounds in the booked time (6 rounds ≈ everyone meets most of
+ * the group). 90 min → 16 points; 2 hours → 24; an hour → 12.
+ */
+export function recommendSetup(players: number, courtsAvailable: number, durationMin: number | null | undefined): Recommendation | null {
+  if (players < 4) return null;
+  const courts = Math.max(1, Math.min(courtsAvailable, Math.floor(players / 4)));
+  const options = [24, 21, 16, 12];
+  const fits = (p: number, n: number) => (estimateRounds(durationMin, p) ?? 0) >= n;
+  const points = !durationMin ? 24 : (options.find((p) => fits(p, 6)) ?? options.find((p) => fits(p, 4)) ?? 12);
+  return { courts, points, rounds: estimateRounds(durationMin, points) };
+}
+
 /** Roster size that keeps everyone on court for 60–100% of rounds: 3 courts → 12–20 players. */
 export function sweetSpot(courts: number): { min: number; max: number } {
   return { min: courts * 4, max: Math.floor((courts * 4) / 0.6) };

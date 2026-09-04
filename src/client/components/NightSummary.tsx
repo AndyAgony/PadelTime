@@ -1,4 +1,5 @@
-import { estimateRounds, planNight, sweetSpot } from "../../shared/timing";
+import { estimateRounds, planNight, recommendSetup, sweetSpot } from "../../shared/timing";
+import type { Recommendation } from "../../shared/timing";
 
 /**
  * "What you get": rounds, matches and breaks per player for a roster size,
@@ -11,16 +12,23 @@ export function NightSummary({
   durationMin,
   points,
   label = "players",
+  onApply,
+  applying = false,
 }: {
   players: number;
   courts: number;
   durationMin: number | null | undefined;
   points: number;
   label?: string;
+  /** When given, the suggestion comes with a "Use" button. */
+  onApply?: (rec: Recommendation) => void;
+  applying?: boolean;
 }) {
   const p = planNight(players, courts, durationMin, points);
   const spot = sweetSpot(courts);
   const shorter = points > 16 ? estimateRounds(durationMin, 16) : null;
+  const rec = recommendSetup(players, courts, durationMin);
+  const suggest = rec && rec.points !== points && rec.rounds != null && p.rounds != null && rec.rounds > p.rounds ? rec : null;
   if (players < 4) {
     return (
       <div className="rounded-2xl bg-canvas px-4 py-3 text-sm text-ink">
@@ -56,11 +64,29 @@ export function NightSummary({
             <> — no breaks until the end</>
           )}
           .
-          {shorter != null && shorter > p.rounds && (
+          {!suggest && shorter != null && shorter > p.rounds && (
             <>
               {" "}
               16-point games would fit <span className="font-bold text-navy">{shorter} rounds</span>.
             </>
+          )}
+        </p>
+      )}
+      {suggest && (
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <span className="font-semibold text-navy">
+            💡 Suggested: {suggest.points}-point games → {suggest.rounds} rounds instead of {p.rounds}. Shorter games, more
+            partners.
+          </span>
+          {onApply && (
+            <button
+              type="button"
+              disabled={applying}
+              onClick={() => onApply(suggest)}
+              className="rounded-full bg-royal px-3 py-1 font-bold text-white hover:bg-royal-dark disabled:opacity-50"
+            >
+              Use {suggest.points} points
+            </button>
           )}
         </p>
       )}

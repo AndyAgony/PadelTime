@@ -219,7 +219,14 @@ export function NewSessionModal({
             <Input type="number" min={4} max={99} value={form.pointsPerMatch} onChange={(e) => setForm({ ...form, pointsPerMatch: num(e.target.value, 24) })} />
           </Field>
         </div>
-        <NightSummary players={form.maxPlayers} courts={form.courts} durationMin={form.durationMin} points={form.pointsPerMatch} label="players (max)" />
+        <NightSummary
+          players={form.maxPlayers}
+          courts={form.courts}
+          durationMin={form.durationMin}
+          points={form.pointsPerMatch}
+          label="players (max)"
+          onApply={(rec) => setForm({ ...form, pointsPerMatch: rec.points, courts: Math.max(form.courts, rec.courts) })}
+        />
         <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-line px-3.5 py-3">
           <input type="checkbox" className="mt-0.5 size-5 accent-royal" checked={form.mixedPairs} onChange={(e) => setForm({ ...form, mixedPairs: e.target.checked })} />
           <span>
