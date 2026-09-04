@@ -23,8 +23,12 @@ export interface EngineContext {
   byeCounts: Record<string, number>;
   /** Round number of each player's most recent bye (0 = never). */
   lastByeRound: Record<string, number>;
-  /** Current leaderboard (points desc, then point difference) — used by ranked formats like Mexicano. */
-  standings: { playerId: string; points: number; diff?: number }[];
+  /**
+   * Court-assignment order for ranked formats like Mexicano: players with results,
+   * best first (points per match played, then total points, then difference).
+   * Empty until a match has been confirmed.
+   */
+  standings: { playerId: string; points: number; diff?: number; played?: number }[];
   /** Ability level per player id (1 newbie … 4 advanced); players without one are omitted. */
   levels?: Record<string, number>;
   /** Random source, injectable for deterministic tests. */

@@ -5,6 +5,7 @@ import { dateParts, firstName, fmtTimeRange, fromLocalInputValue } from "../lib/
 import { SESSION_STATUS_LABEL } from "../../shared/types";
 import type { FormatKey, SessionStatus, SessionSummary } from "../../shared/types";
 import { StylePicker } from "../components/StylePicker";
+import { NightSummary } from "../components/NightSummary";
 import { Badge, Button, Card, EmptyState, ErrorNote, Field, Input, Modal, PageSpinner, ProgressBar, cls } from "../components/ui";
 
 export const statusTone = (s: SessionStatus) =>
@@ -216,6 +217,7 @@ export function NewSessionModal({
             <Input type="number" min={4} max={99} value={form.pointsPerMatch} onChange={(e) => setForm({ ...form, pointsPerMatch: num(e.target.value, 24) })} />
           </Field>
         </div>
+        <NightSummary players={form.maxPlayers} courts={form.courts} durationMin={form.durationMin} points={form.pointsPerMatch} label="players (max)" />
         {previous.length > 0 && (
           <Field label="Bring back the players from" hint="Everyone from that session is added to this one — no re-inviting.">
             <select

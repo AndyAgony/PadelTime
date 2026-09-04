@@ -53,6 +53,18 @@ export function computeStandings(
   return rows;
 }
 
+/**
+ * Court-assignment order for ranked formats (Mexicano): points per match played
+ * first, so sitting a round out never drops you a court; then total points,
+ * then point difference. The leaderboard itself stays on total points.
+ */
+export function rankForCourts<T extends { points: number; diff: number; played: number; name: string }>(rows: T[]): T[] {
+  const avg = (r: T) => (r.played > 0 ? r.points / r.played : -1);
+  return [...rows].sort(
+    (a, b) => avg(b) - avg(a) || b.points - a.points || b.diff - a.diff || a.name.localeCompare(b.name),
+  );
+}
+
 export function matchComplete(m: MatchRow): boolean {
   return m.status === "confirmed";
 }

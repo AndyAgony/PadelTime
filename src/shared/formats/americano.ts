@@ -21,6 +21,7 @@ const OPPONENT_WEIGHT = 3;
 // opponent repeat, so it only decides between otherwise-equal splits: strong +
 // weak vs strong + weak rather than the two strongest together.
 const BALANCE_WEIGHT = 1;
+const SHARED_WEIGHT = 2;
 
 function levelOf(id: string, ctx: EngineContext): number {
   return ctx.levels?.[id] ?? UNSET_LEVEL;
@@ -39,6 +40,18 @@ function teamsCost(a: [string, string], b: [string, string], ctx: EngineContext)
   if (ctx.levels) {
     const gap = Math.abs(levelOf(a[0], ctx) + levelOf(a[1], ctx) - levelOf(b[0], ctx) - levelOf(b[1], ctx));
     cost += BALANCE_WEIGHT * gap;
+  }
+  // Sharing a court at all (as partner or opponent) is what players notice —
+  // "I keep ending up with the same people" — so spread that too.
+  if (SHARED_WEIGHT > 0) {
+    const four = [a[0], a[1], b[0], b[1]];
+    for (let i = 0; i < 4; i++) {
+      for (let j = i + 1; j < 4; j++) {
+        const k = pairKey(four[i], four[j]);
+        const shared = (ctx.partnerCounts[k] ?? 0) + (ctx.opponentCounts[k] ?? 0);
+        cost += SHARED_WEIGHT * shared * shared;
+      }
+    }
   }
   return cost;
 }

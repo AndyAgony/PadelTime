@@ -106,3 +106,15 @@ describe("mexicano seeded round 1", () => {
     expect(plan.matches).toHaveLength(2);
   });
 });
+
+describe("court ranking", () => {
+  it("ranks by points per match played so a sit-out doesn't drop you a court", async () => {
+    const { rankForCourts } = await import("../src/shared/standings");
+    const rows = [
+      { name: "two matches", points: 28, diff: 4, played: 2 }, // 14.0 avg
+      { name: "sat out once", points: 20, diff: 16, played: 1 }, // 20.0 avg
+      { name: "no result", points: 0, diff: 0, played: 0 },
+    ];
+    expect(rankForCourts(rows).map((r) => r.name)).toEqual(["sat out once", "two matches", "no result"]);
+  });
+});

@@ -28,6 +28,7 @@ import { StandingsTable, rankStyle } from "../components/StandingsTable";
 import { statusTone } from "./Home";
 import { StylePicker } from "../components/StylePicker";
 import { LevelBadge, LevelSelect } from "../components/LevelSelect";
+import { NightSummary } from "../components/NightSummary";
 import { FORMAT_META, formatMeta } from "../../shared/formatMeta";
 
 type Run = (key: string, fn: () => Promise<unknown>) => Promise<void>;
@@ -347,8 +348,9 @@ function RulesCard({ d }: { d: SessionDetail }) {
             {d.format === "mexicano" ? (
               <>
                 <InfoRow icon="🎲">
-                  <b>Round 1 is a random draw</b> — or seeded by ability when levels are set. Then the standings deal the
-                  courts: top four on court 1, next four on court 2, and so on.
+                  <b>Round 1 is a random draw</b> — or seeded by ability when levels are set. Then points per match
+                  played deal the courts (sitting out never costs you a court): top four on court 1, next four on court
+                  2, and so on.
                 </InfoRow>
                 <InfoRow icon="🏆">
                   <b>Play your level.</b> On each court it's 1st & 4th vs 2nd & 3rd, so matches stay close. Win and you
@@ -757,27 +759,10 @@ function MyStatusCard({ d, run, busyKey }: { d: SessionDetail; run: Run; busyKey
 
 function StartPreview({ d }: { d: SessionDetail }) {
   const ready = d.counts.confirmed + d.counts.checkedIn;
-  const courtsUsed = Math.min(d.courts, Math.floor(ready / 4));
-  const byes = courtsUsed > 0 ? ready - courtsUsed * 4 : ready;
-  const estimate = estimateRounds(d.durationMin, d.pointsPerMatch);
   if (ready === 0) return null;
   return (
-    <div className="mt-3 rounded-2xl bg-canvas px-4 py-3 text-sm text-ink">
-      <span className="font-black text-navy">{ready}</span> player{ready === 1 ? "" : "s"} →{" "}
-      <span className="font-black text-navy">{courtsUsed}</span> court{courtsUsed === 1 ? "" : "s"} per round
-      {courtsUsed > 0 && byes > 0 && (
-        <>
-          {" "}
-          · <span className="font-black text-navy">{byes}</span> sitting each round
-        </>
-      )}
-      {courtsUsed === 0 && <span className="font-semibold text-amber-dark"> — need at least 4 to start</span>}
-      {estimate && courtsUsed > 0 && (
-        <p className="mt-1 text-xs text-muted">
-          {d.durationMin} min of court time ≈ <span className="font-bold text-navy">{estimate} rounds</span> of{" "}
-          {d.pointsPerMatch} points — keep dealing rounds if you have time left.
-        </p>
-      )}
+    <div className="mt-3">
+      <NightSummary players={ready} courts={d.courts} durationMin={d.durationMin} points={d.pointsPerMatch} />
     </div>
   );
 }
@@ -1240,6 +1225,7 @@ function LiveRosterCard({ d, isOrganizer, run, busyKey }: ViewProps) {
                           )}
                           <span>
                             {p.status === "checked_in" ? "playing" : "not checked in"}
+                            {d.format === "mexicano" && row.played > 0 && ` · ${(row.points / row.played).toFixed(1)}/match`}
                             {row.byes > 0 ? ` · sat out ${row.byes}` : ""}
                             <span className="sm:hidden">
                               {" "}

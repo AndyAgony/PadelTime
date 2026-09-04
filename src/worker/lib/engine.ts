@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { getFormat } from "../../shared/formats/registry";
 import type { EngineContext } from "../../shared/formats/types";
 import { buildHistory } from "../../shared/history";
+import { computeStandings, rankForCourts } from "../../shared/standings";
 import { matches, playerResults, rounds, sessionPlayers } from "../db/schema";
 import type { DB, SessionRow } from "./detail";
 import { loadRounds } from "./detail";
@@ -39,30 +40,17 @@ export async function generateNextRound(
   }
 
   const history = buildHistory(played);
-  const pointsByPlayer: Record<string, number> = {};
-  const againstByPlayer: Record<string, number> = {};
-  for (const r of played) {
-    for (const m of r.matches) {
-      if (m.status !== "confirmed" || m.scoreA == null || m.scoreB == null) continue;
-      for (const id of m.a) {
-        pointsByPlayer[id] = (pointsByPlayer[id] ?? 0) + m.scoreA;
-        againstByPlayer[id] = (againstByPlayer[id] ?? 0) + m.scoreB;
-      }
-      for (const id of m.b) {
-        pointsByPlayer[id] = (pointsByPlayer[id] ?? 0) + m.scoreB;
-        againstByPlayer[id] = (againstByPlayer[id] ?? 0) + m.scoreA;
-      }
-    }
-  }
+  // Ranked formats deal courts from points per match played (bye-adjusted).
+  const ranked = rankForCourts(computeStandings(players.map((p) => ({ id: p.id, name: p.id })), played)).filter(
+    (r) => r.played > 0,
+  );
 
   const ctx: EngineContext = {
     players: eligible,
     courts: session.courts,
     roundNumber: (latest?.number ?? 0) + 1,
     ...history,
-    standings: Object.entries(pointsByPlayer)
-      .map(([playerId, points]) => ({ playerId, points, diff: points - (againstByPlayer[playerId] ?? 0) }))
-      .sort((a, b) => b.points - a.points || (b.diff ?? 0) - (a.diff ?? 0)),
+    standings: ranked.map((r) => ({ playerId: r.playerId, points: r.points, diff: r.diff, played: r.played })),
     levels,
     rng: Math.random,
   };
