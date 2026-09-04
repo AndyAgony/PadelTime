@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Api, useLoad } from "../lib/api";
 import { dateParts, firstName, fmtTimeRange, fromLocalInputValue } from "../lib/format";
 import { SESSION_STATUS_LABEL } from "../../shared/types";
@@ -69,7 +69,16 @@ function SessionCard({ s }: { s: SessionSummary }) {
 
 export function Home() {
   const { data, error, loading, reload } = useLoad(() => Api.me(), []);
-  const [showCreate, setShowCreate] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const num = (k: string) => {
+    const n = parseInt(params.get(k) ?? "", 10);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  // Arriving from the night planner: open the form with that setup filled in.
+  const prefill = params.get("new")
+    ? { maxPlayers: num("players"), courts: num("courts"), pointsPerMatch: num("points"), durationMin: num("duration") }
+    : undefined;
+  const [showCreate, setShowCreate] = useState(!!params.get("new"));
   const navigate = useNavigate();
 
   if (loading) return <PageSpinner />;
@@ -85,7 +94,12 @@ export function Home() {
           <h1 className="text-2xl font-black tracking-tight text-navy">Hey {firstName(data.user.name)} 👋</h1>
           <p className="text-sm text-muted">Ready to hit?</p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>+ New session</Button>
+        <div className="flex items-center gap-3">
+          <Link to="/plan" className="text-sm font-bold text-royal hover:text-royal-dark">
+            Planner
+          </Link>
+          <Button onClick={() => setShowCreate(true)}>+ New session</Button>
+        </div>
       </div>
 
       <section>
@@ -116,7 +130,11 @@ export function Home() {
 
       <NewSessionModal
         open={showCreate}
-        onClose={() => setShowCreate(false)}
+        onClose={() => {
+          setShowCreate(false);
+          if (params.get("new")) setParams({}, { replace: true });
+        }}
+        initial={prefill}
         previous={data.sessions}
         onCreated={(id) => {
           reload();
@@ -127,16 +145,25 @@ export function Home() {
   );
 }
 
+export interface NewSessionPrefill {
+  maxPlayers?: number;
+  courts?: number;
+  pointsPerMatch?: number;
+  durationMin?: number;
+}
+
 export function NewSessionModal({
   open,
   onClose,
   previous,
   onCreated,
+  initial,
 }: {
   open: boolean;
   onClose: () => void;
   previous: SessionSummary[];
   onCreated: (id: string) => void;
+  initial?: NewSessionPrefill;
 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -144,10 +171,10 @@ export function NewSessionModal({
     name: "",
     when: "",
     venue: "",
-    durationMin: 90,
-    courts: 2,
-    maxPlayers: 12,
-    pointsPerMatch: 24,
+    durationMin: initial?.durationMin ?? 90,
+    courts: initial?.courts ?? 2,
+    maxPlayers: initial?.maxPlayers ?? 12,
+    pointsPerMatch: initial?.pointsPerMatch ?? 24,
     copyPlayersFrom: "",
     format: "americano" as FormatKey,
     mixedPairs: false,

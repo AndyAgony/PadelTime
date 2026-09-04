@@ -8,6 +8,7 @@ import { SessionPage } from "./pages/SessionPage";
 import { JoinPage } from "./pages/JoinPage";
 import { BoardPage } from "./pages/BoardPage";
 import { PrintSheetPage } from "./pages/PrintSheetPage";
+import { PlanPage } from "./pages/PlanPage";
 import { firstName } from "./lib/format";
 
 export function Logo({ to = "/app" }: { to?: string }) {
@@ -66,6 +67,7 @@ export function App() {
       <Route path="/join/:code" element={<JoinPage />} />
       <Route path="/board/:code" element={<BoardPage />} />
       <Route path="/print" element={<PrintSheetPage />} />
+      <Route path="/plan" element={<PlanPage />} />
       <Route element={<AppLayout />}>
         <Route path="/app" element={<Home />} />
         <Route path="/app/sessions/:id" element={<SessionPage />} />

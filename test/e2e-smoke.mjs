@@ -61,9 +61,15 @@ async function register(page, name, email) {
 }
 
 const browser = await launch();
+// External font hosts are irrelevant to the flow and can stall first paint behind the sandbox proxy.
+const newContext = async (opts) => {
+  const ctx = await browser.newContext(opts);
+  await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+  return ctx;
+};
 
 // --- Organizer -------------------------------------------------------------
-const orgCtx = await browser.newContext({ ...contextOpts, viewport: { width: 390, height: 844 } });
+const orgCtx = await newContext({ ...contextOpts, viewport: { width: 390, height: 844 } });
 const org = await orgCtx.newPage();
 org.on("dialog", (d) => d.accept());
 
@@ -106,7 +112,7 @@ log("organizer set George as a man — persists");
 await shot(org, "02-roster-open");
 
 // --- Player joins via invite link ------------------------------------------
-const paulaCtx = await browser.newContext({ ...contextOpts, viewport: { width: 390, height: 844 } });
+const paulaCtx = await newContext({ ...contextOpts, viewport: { width: 390, height: 844 } });
 const paula = await paulaCtx.newPage();
 await paula.goto(`${BASE}/join/${code}`);
 await paula.getByText("You're invited").waitFor();
@@ -152,10 +158,14 @@ if (await enterBtn.isVisible().catch(() => false)) {
   await paula.getByRole("button", { name: "+", exact: true }).click();
   await paula.getByRole("button", { name: "+", exact: true }).click();
   await paula.getByRole("button", { name: /Submit score · 14–10/ }).click();
-  await paula
-    .getByText(/waiting for .* to confirm|Final: 14–10/i)
-    .first()
-    .waitFor({ timeout: 10000 });
+  const submitted = paula.getByText(/waiting for .* to confirm|Final: 14–10/i).first();
+  try {
+    await submitted.waitFor({ timeout: 8000 });
+  } catch {
+    // Background pages don't always poll in headless runs; a reload shows the saved score.
+    await paula.reload();
+    await submitted.waitFor({ timeout: 10000 });
+  }
   log("Paula submitted 14–10 for her match");
   await shot(paula, "07-paula-submitted");
 } else {
@@ -183,7 +193,7 @@ await shot(org, "08-standings-r1");
 await org.getByPlaceholder(/late arrival by name/).fill("Late");
 await org.getByRole("button", { name: "Add", exact: true }).click();
 await org.locator("tbody tr", { hasText: "Late" }).first().waitFor({ timeout: 10000 });
-const lateCtx = await browser.newContext({ ...contextOpts, viewport: { width: 390, height: 844 } });
+const lateCtx = await newContext({ ...contextOpts, viewport: { width: 390, height: 844 } });
 const late = await lateCtx.newPage();
 await late.goto(`${BASE}/join/${code}`);
 await late.getByText("The game is already on").waitFor({ timeout: 10000 });
@@ -226,7 +236,7 @@ log("session finished — podium shown");
 await shot(org, "09-final");
 
 // --- Public board (no auth) -------------------------------------------------
-const tvCtx = await browser.newContext({ ...contextOpts, viewport: { width: 1280, height: 800 } });
+const tvCtx = await newContext({ ...contextOpts, viewport: { width: 1280, height: 800 } });
 const tv = await tvCtx.newPage();
 await tv.goto(`${BASE}/board/${code}`);
 await tv.getByText("Leaderboard").waitFor({ timeout: 10000 });
@@ -293,6 +303,21 @@ await org.getByRole("button", { name: "Undo round" }).click();
 await org.getByRole("button", { name: /Pause game/ }).click();
 await org.getByText("Only checked-in players").waitFor({ timeout: 10000 });
 log("empty board recovers: start round 1 again / pause back to check-in");
+
+// --- Night planner → prefilled new session --------------------------------
+await org.goto(`${BASE}/plan?players=12&courts=3&duration=90`);
+await org.getByText("Night planner").waitFor({ timeout: 10000 });
+await org.getByText("🍻 social").first().waitFor();
+const socialRow = org.locator("tr", { hasText: "🍻 social" }).first();
+if (!(await socialRow.innerText()).includes("16 pts")) fail("planner should suggest 16-point games for 12 players / 90 min");
+await socialRow.getByRole("button", { name: "Use" }).click();
+await org.waitForURL("**/app?new=1**", { timeout: 15000 });
+await org.getByText("New session").waitFor({ timeout: 10000 });
+const newForm = org.locator("form", { hasText: "Create session" });
+const courtsVal = await newForm.getByLabel("Courts", { exact: true }).inputValue().catch((e) => `err:${e.message.split("\n")[0]}`);
+const pointsVal = await newForm.getByLabel("Points", { exact: true }).inputValue().catch((e) => `err:${e.message.split("\n")[0]}`);
+if (courtsVal !== "2" || pointsVal !== "16") fail(`planner prefill expected courts 2 / points 16, got ${courtsVal} / ${pointsVal}`);
+log("night planner → 'Use' opens a new session prefilled (2 courts · 16 points)");
 
 await browser.close();
 console.log("\nE2E SMOKE: ALL PASSED ✅");

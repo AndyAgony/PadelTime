@@ -61,7 +61,7 @@ export function Landing() {
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center px-5 pb-16">
         <div className="max-w-xl">
           <p className="mb-4 inline-block rounded-full bg-lime px-3 py-1 text-xs font-bold text-navy">
-            Americano · more formats coming
+            Americano &amp; Mexicano · mixed pairs · live scores
           </p>
           <h1 className="text-4xl font-black leading-tight tracking-tight text-navy sm:text-6xl">
             Padel nights that
@@ -94,6 +94,23 @@ export function Landing() {
         </div>
 
         <div className="mt-8 rounded-3xl border border-line bg-white p-6 sm:p-8">
+          <div className="flex flex-wrap items-center justify-between gap-6">
+            <div className="max-w-sm">
+              <h3 className="text-xl font-black text-navy">How many courts, how many points? 🧮</h3>
+              <p className="mt-1 text-sm text-muted">
+                Tell the planner how many players, courts and minutes you have. It shows every setup with rounds,
+                matches, sit-outs and break length per player — measured on real nights, no account needed.
+              </p>
+            </div>
+            <Link to="/plan">
+              <Button size="lg" variant="secondary">
+                Open the night planner
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-3xl border border-line bg-white p-6 sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-6">
             <div className="max-w-sm">
               <h3 className="text-xl font-black text-navy">Prefer pen &amp; paper? 📝</h3>
